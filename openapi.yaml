@@ -3,7 +3,7 @@ info:
   title: Ante API
   version: 0.1.0
   description: |
-    Dashboard API for the regulator and ingest API for licensed operators.
+    Dashboard API for the responsible-gambling team of a casino group and ingest API for its brands' platforms.
     Dashboard routes sit behind Cloudflare Access. Ingest routes use a per-operator API key.
     "Day" always means days since the player's own first activity; see https://github.com/ante-rg/ante-docs/blob/main/app/architecture.md, section 3.
 servers:
@@ -233,14 +233,12 @@ paths:
           description: OK
           content:
             application/json:
-              schema:
-                type: object
-                required: [status]
-                properties:
-                  status: { type: string, enum: [ok, degraded] }
-                  database: { type: string, enum: [ok, down] }
-                  scorer: { type: string, enum: [ok, down] }
-                  model_version: { type: string }
+              schema: { $ref: "#/components/schemas/Health" }
+        "503":
+          description: Database unavailable
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Health" }
 
 components:
   securitySchemes:
@@ -553,6 +551,15 @@ components:
           items: { $ref: "#/components/schemas/Reason" }
         model_version: { type: string }
 
+    Health:
+      type: object
+      required: [status, version]
+      properties:
+        status: { type: string, enum: [ok, degraded, down] }
+        database: { type: string, enum: [ok, down] }
+        scorer: { type: string, enum: [ok, down] }
+        model_version: { type: string }
+        version: { type: string, description: Git SHA of the running build }
     Error:
       type: object
       required: [code, message]

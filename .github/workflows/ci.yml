@@ -1,0 +1,168 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  go:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: api/go.mod
+          cache-dependency-path: api/go.sum
+      - uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.15.0
+          install-mode: goinstall
+          working-directory: api
+      - run: go test ./...
+        working-directory: api
+
+  scorer:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: scorer
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.3.3
+      - run: uv sync --frozen
+      - run: uv run --frozen ruff check .
+      - run: uv run --frozen ruff format --check .
+      - run: uv run --frozen pytest
+
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+
+  generated:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: api/go.mod
+          cache-dependency-path: api/go.sum
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+        working-directory: web
+      - run: make gen
+      - name: Fail on generated-code drift
+        run: |
+          git diff --exit-code
+          untracked=$(git status --porcelain -- api/internal/gen web/src/api | grep '^??' || true)
+          if [ -n "$untracked" ]; then
+            echo "untracked generated files:"
+            echo "$untracked"
+            exit 1
+          fi
+
+  images:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: api/Dockerfile
+          push: false
+          load: true
+          tags: ante-app:local
+          platforms: linux/amd64
+          build-args: VERSION=${{ github.sha }}
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,scope=api,mode=max
+      - uses: docker/build-push-action@v7
+        with:
+          context: scorer
+          push: false
+          load: true
+          tags: ante-app-scorer:local
+          platforms: linux/amd64
+          cache-from: type=gha,scope=scorer
+          cache-to: type=gha,scope=scorer,mode=max
+      - name: Smoke test the stack
+        env:
+          POSTGRES_PASSWORD: ci
+        run: |
+          compose="docker compose -f deploy/docker-compose.yml -f deploy/local.yml"
+          trap '$compose logs; $compose down -v' EXIT
+          $compose up -d --wait --no-build
+          ok=0
+          for i in $(seq 1 15); do
+            body=$(curl -fsS localhost:8080/healthz || true)
+            echo "healthz attempt $i: $body" >&2
+            case "$body" in *'"status":"ok"'*) ok=1; break;; esac
+            sleep 2
+          done
+          [ "$ok" = 1 ] || { echo "healthz never reported ok" >&2; exit 1; }
+          curl -fsS localhost:8080/ | grep -qi '<html'
+
+  publish:
+    needs: [go, scorer, web, generated]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    concurrency:
+      group: publish-main
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: api/Dockerfile
+          push: true
+          labels: org.opencontainers.image.source=https://github.com/ante-rg/ante-app
+          platforms: linux/amd64
+          build-args: VERSION=${{ github.sha }}
+          tags: |
+            ghcr.io/ante-rg/ante-app:${{ github.sha }}
+            ghcr.io/ante-rg/ante-app:latest
+      - uses: docker/build-push-action@v7
+        with:
+          context: scorer
+          push: true
+          labels: org.opencontainers.image.source=https://github.com/ante-rg/ante-app
+          platforms: linux/amd64
+          tags: |
+            ghcr.io/ante-rg/ante-app-scorer:${{ github.sha }}
+            ghcr.io/ante-rg/ante-app-scorer:latest

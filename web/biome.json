@@ -1,0 +1,5 @@
+{
+  "files": { "includes": ["**", "!dist", "!src/api/schema.d.ts", "!src/styles/tokens.css"] },
+  "formatter": { "indentStyle": "space", "lineWidth": 120 },
+  "javascript": { "formatter": { "quoteStyle": "single" } }
+}

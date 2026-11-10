@@ -24,8 +24,12 @@ __pycache__/
 # Web
 node_modules/
 web/dist/
+*.tsbuildinfo
 
 # OS / editors
 .DS_Store
 .idea/
 .vscode/
+
+# AI-generated specs and plans (local only)
+docs/superpowers/

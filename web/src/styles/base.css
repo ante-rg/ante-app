@@ -1,0 +1,28 @@
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: var(--text-md);
+  line-height: var(--leading);
+}
+
+.app-header {
+  padding: var(--s4) var(--s5);
+  background: var(--surface);
+  border-bottom: 1px solid var(--rule);
+}
+
+.app-header h1 {
+  margin: 0;
+  font-size: var(--text-lg);
+}
+
+main {
+  padding: var(--s5);
+}
+
+:focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: 2px;
+}
