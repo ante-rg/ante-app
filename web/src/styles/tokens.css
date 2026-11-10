@@ -1,0 +1,59 @@
+/* Ante design tokens. "Inspector's file": cool paper, navy ink, one warm risk scale.
+   Every colour in the app comes from here. Light first; dark redefines tokens only. */
+:root {
+  /* surfaces and text */
+  --paper: #eef1f5;        /* page ground: cool grey-blue, not cream */
+  --surface: #ffffff;      /* tables, panels, form */
+  --sunken: #e3e8ef;       /* hover rows, track of sliders, empty cells */
+  --ink: #172238;          /* primary text: navy, reads as "official document" */
+  --ink-soft: #55607a;     /* secondary text */
+  --rule: #cdd4df;         /* borders and table lines */
+
+  /* interaction */
+  --action: #24467f;       /* links, primary button, focus ring, replay line */
+  --on-action: #ffffff;
+
+  /* risk scale: one warm hue family, never red/green */
+  --risk-high: #7b1e2c;        /* oxblood */
+  --risk-high-tint: #f3e3e6;
+  --on-risk-high: #ffffff;
+  --risk-elevated: #9a6414;    /* ochre */
+  --risk-elevated-tint: #f6ecda;
+  --risk-low: #8a93a6;
+  --risk-none: #d7dde6;        /* insufficient data, inactive */
+
+  /* type */
+  --font-ui: "Atkinson Hyperlegible Next", "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
+  --text-xs: 0.8125rem;   /* 13 */
+  --text-sm: 0.875rem;    /* 14 */
+  --text-md: 1rem;        /* 16, body */
+  --text-lg: 1.25rem;     /* 20, section */
+  --text-xl: 1.75rem;     /* 28, case title */
+  --text-num: 2rem;       /* 32, score */
+  --leading: 1.5;
+
+  /* space and shape */
+  --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px; --s6: 32px; --s7: 48px;
+  --radius-control: 6px;   /* buttons, inputs */
+  --radius-panel: 2px;     /* panels are sheets of paper, almost square */
+  --radius-chip: 999px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #10161f; --surface: #172030; --sunken: #1f2a3c; --ink: #e4e9f1; --ink-soft: #9ba6b9; --rule: #2c3849;
+    --action: #8fb0e8; --on-action: #0f1a2e;
+    --risk-high: #e48b98; --risk-high-tint: #3a1d25; --on-risk-high: #2a0d14;
+    --risk-elevated: #dcac58; --risk-elevated-tint: #34291a;
+    --risk-low: #7c869a; --risk-none: #2a3445;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #10161f; --surface: #172030; --sunken: #1f2a3c; --ink: #e4e9f1; --ink-soft: #9ba6b9; --rule: #2c3849;
+  --action: #8fb0e8; --on-action: #0f1a2e;
+  --risk-high: #e48b98; --risk-high-tint: #3a1d25; --on-risk-high: #2a0d14;
+  --risk-elevated: #dcac58; --risk-elevated-tint: #34291a;
+  --risk-low: #7c869a; --risk-none: #2a3445;
+  color-scheme: dark;
+}

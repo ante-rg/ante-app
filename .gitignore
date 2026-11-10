@@ -1,0 +1,31 @@
+# Data: never commit real data or model artifacts
+*.parquet
+*.csv
+!fixtures/**/*.csv
+artifacts/
+data/
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Go
+/api/bin/
+*.test
+coverage.out
+
+# Python
+__pycache__/
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# Web
+node_modules/
+web/dist/
+
+# OS / editors
+.DS_Store
+.idea/
+.vscode/

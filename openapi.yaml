@@ -1,0 +1,571 @@
+openapi: 3.1.0
+info:
+  title: Ante API
+  version: 0.1.0
+  description: |
+    Dashboard API for the regulator and ingest API for licensed operators.
+    Dashboard routes sit behind Cloudflare Access. Ingest routes use a per-operator API key.
+    "Day" always means days since the player's own first activity; see https://github.com/ante-rg/ante-docs/blob/main/app/architecture.md, section 3.
+servers:
+  - url: /
+tags:
+  - name: replay
+  - name: queue
+  - name: players
+  - name: reviews
+  - name: operators
+  - name: model
+  - name: ingest
+  - name: system
+
+paths:
+  /api/v1/replay:
+    get:
+      tags: [replay]
+      summary: Replay range and active model
+      operationId: getReplay
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Replay" }
+
+  /api/v1/queue:
+    get:
+      tags: [queue]
+      summary: Review queue as of a replay day
+      description: |
+        Normal mode: players ranked by score, filtered by band and operator.
+        Blind mode: the fixed review sample in shuffled order; score, band, rank, source and reasons are omitted.
+      operationId: getQueue
+      parameters:
+        - $ref: "#/components/parameters/AsOfDay"
+        - $ref: "#/components/parameters/Mode"
+        - name: operator
+          in: query
+          schema: { $ref: "#/components/schemas/OperatorCode" }
+        - name: band
+          in: query
+          description: Comma-separated. Ignored in blind mode.
+          schema: { type: string, example: "high,elevated", default: "high,elevated" }
+        - name: review_status
+          in: query
+          schema: { type: string, enum: [all, pending, reviewed], default: all }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Queue" }
+
+  /api/v1/players/{player_id}:
+    get:
+      tags: [players]
+      summary: Player case header, score and reasons
+      operationId: getPlayer
+      parameters:
+        - $ref: "#/components/parameters/PlayerId"
+        - $ref: "#/components/parameters/AsOfDay"
+        - $ref: "#/components/parameters/Mode"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PlayerCase" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/players/{player_id}/timeline:
+    get:
+      tags: [players]
+      summary: Daily activity from day 0 up to as_of_day
+      operationId: getPlayerTimeline
+      parameters:
+        - $ref: "#/components/parameters/PlayerId"
+        - $ref: "#/components/parameters/AsOfDay"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Timeline" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/players/{player_id}/sessions:
+    get:
+      tags: [players]
+      summary: Sessions up to as_of_day, newest first
+      operationId: listPlayerSessions
+      parameters:
+        - $ref: "#/components/parameters/PlayerId"
+        - $ref: "#/components/parameters/AsOfDay"
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+        - name: before_session_no
+          in: query
+          description: Cursor. Returns sessions with a lower session number.
+          schema: { type: integer }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SessionPage" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/players/{player_id}/reviews:
+    get:
+      tags: [reviews]
+      summary: All reviews of this player, newest first
+      operationId: listPlayerReviews
+      parameters:
+        - $ref: "#/components/parameters/PlayerId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/Review" }
+    post:
+      tags: [reviews]
+      summary: Save a review
+      description: Append-only. The reviewer is taken from the authenticated user, not from the body.
+      operationId: createReview
+      parameters:
+        - $ref: "#/components/parameters/PlayerId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ReviewCreate" }
+      responses:
+        "201":
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Review" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/Invalid" }
+
+  /api/v1/operators:
+    get:
+      tags: [operators]
+      summary: Band counts per operator as of a replay day
+      operationId: listOperators
+      parameters:
+        - $ref: "#/components/parameters/AsOfDay"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [as_of_day, items]
+                properties:
+                  as_of_day: { type: integer }
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/OperatorSummary" }
+
+  /api/v1/model:
+    get:
+      tags: [model]
+      summary: Model card of the active model
+      operationId: getModelCard
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ModelCard" }
+
+  /ingest/v1/events:
+    post:
+      tags: [ingest]
+      summary: Submit a batch of events for one player and get the current score
+      description: |
+        Idempotent per (operator, player_id, event_order): repeated events are counted as duplicates and ignored.
+        The band is derived from the score cut-offs of the latest replay ranking.
+      operationId: ingestEvents
+      security:
+        - operatorKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EventBatch" }
+      responses:
+        "200":
+          description: Stored and scored
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IngestResult" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403":
+          description: The key belongs to another operator
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422": { $ref: "#/components/responses/Invalid" }
+        "503":
+          description: Events stored, scorer unavailable; score is null
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IngestResult" }
+
+  /healthz:
+    get:
+      tags: [system]
+      summary: Liveness and dependency status
+      operationId: getHealth
+      security: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status: { type: string, enum: [ok, degraded] }
+                  database: { type: string, enum: [ok, down] }
+                  scorer: { type: string, enum: [ok, down] }
+                  model_version: { type: string }
+
+components:
+  securitySchemes:
+    cfAccess:
+      type: apiKey
+      in: header
+      name: Cf-Access-Jwt-Assertion
+      description: Set by Cloudflare Access. In development AUTH_DEV_USER replaces it.
+    operatorKey:
+      type: apiKey
+      in: header
+      name: X-API-Key
+
+  parameters:
+    AsOfDay:
+      name: as_of_day
+      in: query
+      description: Days since each player's own first activity. Defaults to replay.default_day.
+      schema: { type: integer, minimum: 0 }
+    Mode:
+      name: mode
+      in: query
+      schema: { type: string, enum: [normal, blind], default: normal }
+    PlayerId:
+      name: player_id
+      in: path
+      required: true
+      schema: { type: string, pattern: "^[A-Za-z0-9_-]{1,64}$", example: S086 }
+
+  responses:
+    NotFound:
+      description: Not found
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Invalid:
+      description: Request body failed validation
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Unauthorized:
+      description: Missing or unknown API key
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+
+  schemas:
+    OperatorCode:
+      type: string
+      pattern: "^P[0-9]+$"
+      example: P3
+
+    Band:
+      type: string
+      enum: [high, elevated, low, insufficient_data]
+
+    Outcome:
+      type: string
+      enum: [intervention_needed, no_concern, not_enough_data]
+
+    Reason:
+      type: object
+      required: [code, text, weight]
+      properties:
+        code: { type: string, example: chase_sessions_30d }
+        text: { type: string, example: "Deposited 3 or more times in one losing session on 9 of the last 30 days" }
+        weight: { type: number, description: "Share of the score explained, 0-1", example: 0.46 }
+
+    Replay:
+      type: object
+      required: [min_day, max_day, default_day, model_version]
+      properties:
+        min_day: { type: integer, example: 0 }
+        max_day: { type: integer, example: 771 }
+        default_day: { type: integer, example: 120 }
+        model_version: { type: string, example: "v0.3.0" }
+
+    QueueItem:
+      type: object
+      required: [player_id, operator_code, effective_day, days_observed, review_status]
+      properties:
+        player_id: { type: string }
+        operator_code: { $ref: "#/components/schemas/OperatorCode" }
+        effective_day: { type: integer, description: "min(as_of_day, last_day)" }
+        history_ended_on_day: { type: [integer, "null"] }
+        days_observed: { type: integer }
+        rank: { type: integer, description: "Omitted in blind mode" }
+        score: { type: [number, "null"], description: "Omitted in blind mode" }
+        band: { $ref: "#/components/schemas/Band" }
+        score_trend_30d:
+          type: array
+          description: Score on each of the last 30 days, oldest first. Omitted in blind mode.
+          items: { type: [number, "null"] }
+        main_reason: { type: string, description: "Text of the top reason. Omitted in blind mode." }
+        flagged_by_rules: { type: boolean, description: "Omitted in blind mode" }
+        review_status: { type: string, enum: [pending, reviewed] }
+        last_outcome: { oneOf: [{ $ref: "#/components/schemas/Outcome" }, { type: "null" }] }
+
+    Queue:
+      type: object
+      required: [as_of_day, mode, counts, items]
+      properties:
+        as_of_day: { type: integer }
+        mode: { type: string, enum: [normal, blind] }
+        counts:
+          type: object
+          description: Band counts across all operators; omitted in blind mode.
+          properties:
+            high: { type: integer }
+            elevated: { type: integer }
+            low: { type: integer }
+            insufficient_data: { type: integer }
+            pending_review: { type: integer }
+            new_high_since_previous_day: { type: integer }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/QueueItem" }
+
+    PlayerCase:
+      type: object
+      required: [player_id, operator_code, as_of_day, effective_day, days_observed, sessions_to_date, deposits_to_date]
+      properties:
+        player_id: { type: string }
+        operator_code: { $ref: "#/components/schemas/OperatorCode" }
+        as_of_day: { type: integer }
+        effective_day: { type: integer }
+        history_ended_on_day: { type: [integer, "null"] }
+        days_observed: { type: integer }
+        sessions_to_date: { type: integer }
+        deposits_to_date: { type: integer }
+        deposits_eur_to_date: { type: number }
+        score: { type: [number, "null"] }
+        band: { $ref: "#/components/schemas/Band" }
+        rank: { type: integer }
+        rank_of: { type: integer, example: 100 }
+        first_high_day: { type: [integer, "null"], description: "First day this player entered the high band" }
+        first_rule_flag_day: { type: [integer, "null"], description: "First day any fixed rule fired" }
+        reasons:
+          type: array
+          maxItems: 3
+          items: { $ref: "#/components/schemas/Reason" }
+        rule_flags:
+          type: array
+          items:
+            type: object
+            required: [rule_id, text, first_day]
+            properties:
+              rule_id: { type: string }
+              text: { type: string }
+              first_day: { type: integer }
+
+    TimelineDay:
+      type: object
+      required: [day]
+      properties:
+        day: { type: integer }
+        deposits_n: { type: integer }
+        deposits_eur: { type: number }
+        sessions_n: { type: integer }
+        play_minutes: { type: integer }
+        net_result_eur: { type: number }
+        chase_sessions_n: { type: integer }
+        night_sessions_n: { type: integer }
+        end_balance_eur: { type: [number, "null"] }
+        score: { type: [number, "null"] }
+        band: { $ref: "#/components/schemas/Band" }
+
+    Timeline:
+      type: object
+      required: [player_id, as_of_day, days]
+      properties:
+        player_id: { type: string }
+        as_of_day: { type: integer }
+        first_high_day: { type: [integer, "null"] }
+        first_rule_flag_day: { type: [integer, "null"] }
+        days:
+          type: array
+          description: Only days with activity; the client fills gaps with zero.
+          items: { $ref: "#/components/schemas/TimelineDay" }
+
+    Session:
+      type: object
+      required: [session_no, start_day, duration_s, deposits_n, deposits_eur, net_result_eur, is_night, is_chase]
+      properties:
+        session_no: { type: integer }
+        start_day: { type: integer }
+        duration_s: { type: integer }
+        deposits_n: { type: integer }
+        deposits_eur: { type: number }
+        net_result_eur: { type: number }
+        is_night: { type: boolean }
+        is_chase: { type: boolean, description: "Session of 2 h or more, 3 or more deposits, net loss" }
+
+    SessionPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Session" }
+        next_before_session_no: { type: [integer, "null"] }
+
+    ReviewCreate:
+      type: object
+      required: [as_of_day, outcome, mode]
+      additionalProperties: false
+      properties:
+        as_of_day: { type: integer, minimum: 0 }
+        outcome: { $ref: "#/components/schemas/Outcome" }
+        note: { type: string, maxLength: 2000 }
+        mode: { type: string, enum: [normal, blind] }
+
+    Review:
+      type: object
+      required: [id, player_id, as_of_day, outcome, reviewer, blind, model_version, created_at]
+      properties:
+        id: { type: integer }
+        player_id: { type: string }
+        as_of_day: { type: integer }
+        outcome: { $ref: "#/components/schemas/Outcome" }
+        note: { type: [string, "null"] }
+        reviewer: { type: string, format: email }
+        blind: { type: boolean }
+        model_version: { type: string }
+        created_at: { type: string, format: date-time }
+
+    OperatorSummary:
+      type: object
+      required: [operator_code, players, high, elevated, low, insufficient_data, flagged_by_rules_too, reviewed]
+      properties:
+        operator_code: { $ref: "#/components/schemas/OperatorCode" }
+        players: { type: integer }
+        high: { type: integer }
+        elevated: { type: integer }
+        low: { type: integer }
+        insufficient_data: { type: integer }
+        flagged_by_rules_too: { type: integer, description: "High or elevated players that a fixed rule also flags" }
+        reviewed: { type: integer }
+
+    ModelCard:
+      type: object
+      required: [model_version, summary, limits, metrics]
+      properties:
+        model_version: { type: string }
+        trained_at: { type: string, format: date-time }
+        summary: { type: string, description: "Plain-language description of what the score means" }
+        label_definition: { type: string }
+        limits:
+          type: array
+          items: { type: string }
+        metrics:
+          type: array
+          description: One row per observation window and evaluation split
+          items:
+            type: object
+            required: [window_days, split, method, precision_top20, recall_top20]
+            properties:
+              window_days: { type: integer, enum: [7, 14, 30] }
+              split: { type: string, description: "'all' or a held-out operator code", example: P3 }
+              method: { type: string, enum: [model, rules] }
+              precision_top20: { type: number }
+              recall_top20: { type: number }
+
+    Event:
+      type: object
+      required: [event_order, event_type, seconds_from_first_event]
+      description: Mirrors the columns of events.parquet. Unknown fields are kept in the stored payload.
+      additionalProperties: true
+      properties:
+        event_order: { type: integer, minimum: 1 }
+        event_type:
+          type: string
+          enum: [BET_PLACED, BET_RESULT, GAME_STATE, DEPOSIT, WITHDRAWAL_REQUEST, BONUS_ACTIVATION, BONUS_CANCEL, FREE_SPIN_PACKAGE]
+        seconds_from_first_event: { type: integer, minimum: 0 }
+        local_hour: { type: integer, minimum: 0, maximum: 23 }
+        weekday: { type: integer, minimum: 1, maximum: 7 }
+        product: { type: [string, "null"], enum: [SLOTS, LIVE, SPORTSBOOK, null] }
+        provider_code: { type: [string, "null"] }
+        game_code: { type: [string, "null"] }
+        stake_eur: { type: [number, "null"] }
+        returned_eur: { type: [number, "null"] }
+        total_balance_eur: { type: [number, "null"] }
+        payment_amount_eur: { type: [number, "null"] }
+        payment_category: { type: [string, "null"] }
+
+    EventBatch:
+      type: object
+      required: [player_id, events]
+      additionalProperties: false
+      properties:
+        player_id: { type: string, pattern: "^[A-Za-z0-9_-]{1,64}$", description: "Operator's pseudonymous player ID" }
+        events:
+          type: array
+          minItems: 1
+          maxItems: 5000
+          items: { $ref: "#/components/schemas/Event" }
+
+    IngestResult:
+      type: object
+      required: [player_id, accepted, duplicates, score]
+      properties:
+        player_id: { type: string }
+        accepted: { type: integer }
+        duplicates: { type: integer }
+        last_event_order: { type: integer }
+        score: { type: [number, "null"] }
+        band: { $ref: "#/components/schemas/Band" }
+        reasons:
+          type: array
+          items: { $ref: "#/components/schemas/Reason" }
+        model_version: { type: string }
+
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code: { type: string, example: not_found }
+        message: { type: string, example: "Player S999 not found" }
+        details:
+          type: array
+          items:
+            type: object
+            properties:
+              field: { type: string }
+              problem: { type: string }
+
+security:
+  - cfAccess: []
