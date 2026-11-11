@@ -1,0 +1,21 @@
+# Layered over docker-compose.yml. Use `make up` / `make dev`, or export POSTGRES_PASSWORD.
+services:
+  postgres:
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ante}
+    ports: ["127.0.0.1:5432:5432"]
+
+  api:
+    build:
+      context: ..
+      dockerfile: api/Dockerfile
+    image: ante-app:local
+    environment:
+      DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD:-ante}@postgres:5432/postgres?sslmode=disable
+      AUTH_DEV_USER: dev@localhost
+
+  scorer:
+    build:
+      context: ../scorer
+    image: ante-app-scorer:local
+    ports: ["127.0.0.1:8000:8000"]
