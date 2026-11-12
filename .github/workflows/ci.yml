@@ -166,3 +166,34 @@ jobs:
           tags: |
             ghcr.io/ante-rg/ante-app-scorer:${{ github.sha }}
             ghcr.io/ante-rg/ante-app-scorer:latest
+
+  deploy:
+    needs: [publish]
+    runs-on: ubuntu-latest
+    concurrency:
+      group: deploy-main
+      cancel-in-progress: false
+    env:
+      CF_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+      CF_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+    steps:
+      - name: Ask Watchtower to pull the new images
+        env:
+          WATCHTOWER_TOKEN: ${{ secrets.WATCHTOWER_TOKEN }}
+        run: |
+          curl -fsS --max-time 300 -X POST \
+            -H "CF-Access-Client-Id: $CF_ID" -H "CF-Access-Client-Secret: $CF_SECRET" \
+            -H "Authorization: Bearer $WATCHTOWER_TOKEN" \
+            "${{ vars.DEPLOY_URL }}/v1/update"
+      - name: Wait until the server runs this commit
+        run: |
+          for i in $(seq 1 30); do
+            body=$(curl -fsS --max-time 10 \
+              -H "CF-Access-Client-Id: $CF_ID" -H "CF-Access-Client-Secret: $CF_SECRET" \
+              "${{ vars.APP_URL }}/healthz" || true)
+            echo "attempt $i: $body"
+            [ "$(echo "$body" | jq -r '.version? // empty' 2>/dev/null)" = "$GITHUB_SHA" ] && exit 0
+            sleep 10
+          done
+          echo "server did not report version $GITHUB_SHA within 5 minutes" >&2
+          exit 1

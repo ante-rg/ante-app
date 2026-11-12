@@ -14,7 +14,7 @@ services:
 
   api:
     image: ghcr.io/ante-rg/ante-app:latest
-    ports: ["127.0.0.1:8080:8080"]
+    ports: ["127.0.0.1:${API_PORT:-8080}:8080"]
     environment:
       DATABASE_URL: ${DATABASE_URL}
       SCORER_URL: http://scorer:8000
@@ -42,7 +42,7 @@ services:
       WATCHTOWER_HTTP_API_UPDATE: "true"
       WATCHTOWER_HTTP_API_TOKEN: ${WATCHTOWER_TOKEN}
       WATCHTOWER_HTTP_API_PERIODIC_POLLS: "true"
-    ports: ["127.0.0.1:8081:8080"]
+    ports: ["127.0.0.1:${WATCHTOWER_PORT:-8081}:8080"]
     restart: unless-stopped
 
 volumes:
