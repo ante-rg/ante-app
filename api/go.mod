@@ -12,6 +12,7 @@ require (
 	github.com/go-chi/chi/v5 v5.5.0
 	github.com/jackc/pgx/v5 v5.12.0
 	github.com/oapi-codegen/runtime v1.8.0
+	github.com/parquet-go/parquet-go v0.32.0
 	github.com/pressly/goose/v3 v3.29.0
 	github.com/testcontainers/testcontainers-go v0.45.0
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.45.0
@@ -100,6 +101,8 @@ require (
 	github.com/oasdiff/yaml3 v0.0.14 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.1.1 // indirect
+	github.com/parquet-go/bitpack v1.0.0 // indirect
+	github.com/parquet-go/jsonlite v1.0.0 // indirect
 	github.com/paulmach/orb v0.13.0 // indirect
 	github.com/pganalyze/pg_query_go/v6 v6.2.2 // indirect
 	github.com/pierrec/lz4/v4 v4.1.33 // indirect
@@ -129,6 +132,7 @@ require (
 	github.com/tklauser/go-sysconf v0.4.0 // indirect
 	github.com/tklauser/numcpus v0.12.0 // indirect
 	github.com/tursodatabase/libsql-client-go v0.0.0-20260528064733-9d5d30a29a60 // indirect
+	github.com/twpayne/go-geom v1.6.1 // indirect
 	github.com/vertica/vertica-sql-go v1.3.8 // indirect
 	github.com/vmware-labs/yaml-jsonpath v0.3.2 // indirect
 	github.com/wasilibs/go-pgquery v0.0.0-20250409022910-10ac41983c07 // indirect
