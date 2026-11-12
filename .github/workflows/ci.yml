@@ -78,7 +78,7 @@ jobs:
       - name: Fail on generated-code drift
         run: |
           git diff --exit-code
-          untracked=$(git status --porcelain -- api/internal/gen web/src/api | grep '^??' || true)
+          untracked=$(git status --porcelain -- api/internal/gen api/internal/store web/src/api | grep '^??' || true)
           if [ -n "$untracked" ]; then
             echo "untracked generated files:"
             echo "$untracked"

@@ -37,7 +37,7 @@ The data science work lives in a separate repository, `ante-research`. It will p
 
 ## Current state
 
-The repository is a runnable skeleton: Go API with `/healthz` and an empty embedded migrations folder, Python scorer with `/healthz`, React app with a Health screen, Docker Compose files, and a CI workflow that also publishes images. Every operation in `openapi.yaml` except `getHealth` answers `501 Not Implemented` until its feature task.
+The repository is a runnable skeleton: Go API with `/healthz` and an embedded goose migration with the replay schema, Python scorer with `/healthz`, React app with a Health screen, Docker Compose files, and a CI workflow that also publishes images. Every operation in `openapi.yaml` except `getHealth` answers `501 Not Implemented` until its feature task.
 
 The data artifacts from `ante-research` do not exist yet. Until the data science team publishes them, use dummy artifacts: a Go command (`api/cmd/fakeartifacts`, later) writes a deterministic set in the format of `../ante-docs/app/architecture.md` section 4 to `artifacts/dummy-v0/` (git-ignored). Keep the loader strict about that format so real artifacts replace the dummy ones without code changes.
 
@@ -68,7 +68,7 @@ api/            Go module (github.com/ante-rg/ante-app/api)
   internal/gen/   oapi-codegen output. Never edit by hand.
   internal/http/  chi router, handlers, middleware (request id, slog)
   internal/testdb/ testcontainers Postgres for tests
-  internal/store/ (later) sqlc queries and generated code
+  internal/store/ sqlc queries (queries/*.sql) and generated code
   internal/scorer/ (later) client for the Python scorer
   migrations/     goose SQL migrations, embedded in the binary
 scorer/         Python 3.12 FastAPI service, managed with uv
@@ -98,15 +98,15 @@ Ask before adding a dependency that is not on this list. goose and testcontainer
 ```
 make dev          # postgres + scorer in docker, api (go run) and web (Vite) locally
 make up           # full stack in docker, built from source, on :8080
-make gen          # oapi-codegen and openapi-typescript
+make gen          # oapi-codegen, openapi-typescript and sqlc
 make test         # go test ./..., pytest, vitest
 make lint         # golangci-lint v2.15.0 (go run), ruff check + format check, Biome + tsc --noEmit
 make build        # build the compose images from source
 ```
 
-`make contract` (contract test: ingest fixtures, compare scores with expected) and `make load MODEL=<version>` (run the loader against `artifacts/<version>`) are added by later tasks. `make gen` will also run sqlc once its config exists.
+`make contract` (contract test: ingest fixtures, compare scores with expected) and `make load MODEL=<version>` (run the loader against `artifacts/<version>`) are added by later tasks. `make gen` also runs sqlc.
 
-Run `make gen` after any change to `openapi.yaml` (and, once added, `api/internal/store/queries/*.sql`), and commit the generated code.
+Run `make gen` after any change to `openapi.yaml`, `api/migrations/*.sql` or `api/internal/store/queries/*.sql`, and commit the generated code.
 
 ## Deployment
 
