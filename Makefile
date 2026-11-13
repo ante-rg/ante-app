@@ -7,6 +7,7 @@ LINT_GO := go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0
 
 gen:
 	cd api && go tool oapi-codegen -config oapi-codegen.yaml ../openapi.yaml
+	cd api && go tool sqlc generate
 	cd web && npm run gen
 
 lint:

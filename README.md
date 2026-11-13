@@ -18,7 +18,7 @@ make dev    # Postgres and scorer in Docker, API and web locally; web on the Vit
 make up     # full stack in Docker, built from source, on :8080
 make test   # Go, Python and web tests
 make lint   # golangci-lint, ruff, Biome and tsc
-make gen    # regenerate code from openapi.yaml
+make gen    # regenerate code from openapi.yaml and the sqlc queries
 cd api && go run ./cmd/fakeartifacts   # synthetic artifacts/dummy-v0 (git-ignored)
 ```
 
