@@ -39,7 +39,7 @@ The data science work lives in a separate repository, `ante-research`. It will p
 
 The repository is a runnable skeleton: Go API with `/healthz` and an embedded goose migration with the replay schema, Python scorer with `/healthz`, React app with a Health screen, Docker Compose files, and a CI workflow that also publishes images. Every operation in `openapi.yaml` except `getHealth` answers `501 Not Implemented` until its feature task.
 
-The data artifacts from `ante-research` do not exist yet. Until the data science team publishes them, use dummy artifacts: a Go command (`api/cmd/fakeartifacts`, later) writes a deterministic set in the format of `../ante-docs/app/architecture.md` section 4 to `artifacts/dummy-v0/` (git-ignored). Keep the loader strict about that format so real artifacts replace the dummy ones without code changes.
+The data artifacts from `ante-research` do not exist yet. Until the data science team publishes them, use dummy artifacts: a Go command (`api/cmd/fakeartifacts`) writes a deterministic set in the format of `../ante-docs/app/architecture.md` section 4 to `artifacts/dummy-v0/` (git-ignored). Keep the loader strict about that format so real artifacts replace the dummy ones without code changes.
 
 Suggested order: Postgres schema and migrations → fake artifacts and loader → read endpoints with `as_of_day` → web: queue and player case → reviews and blind mode → ingest and scorer → Cloudflare hostnames and the `deploy` job → operators and about screens.
 
@@ -62,7 +62,7 @@ Entries marked "(later)" do not exist yet.
 api/            Go module (github.com/ante-rg/ante-app/api)
   cmd/api/        HTTP server, also serves web/dist
   cmd/loader/     (later) loads artifacts/<model_version>/ into Postgres, reads parquet
-  cmd/fakeartifacts/ (later) writes dummy artifacts for development
+  cmd/fakeartifacts/ writes dummy artifacts for development
   internal/config/ environment config
   internal/db/    pgx pool, goose migrations applied on start
   internal/gen/   oapi-codegen output. Never edit by hand.
@@ -91,7 +91,7 @@ fixtures/       (later) synthetic players for tests and the contract test
 - Web: React 19, TypeScript strict, Vite, React Router, TanStack Query, Vitest, Testing Library, Biome (lint and format), openapi-typescript, npm. Radix Primitives and visx arrive with the first feature that uses them. Plain CSS with custom properties. No Tailwind, no component kits, no CSS-in-JS.
 - PostgreSQL 16. Node 24 LTS.
 
-Ask before adding a dependency that is not on this list. goose and testcontainers-go are already direct dependencies of `api`. The one approved addition still pending is parquet-go, for the loader.
+Ask before adding a dependency that is not on this list. goose, testcontainers-go and parquet-go are already direct dependencies of `api`.
 
 ## Commands
 
