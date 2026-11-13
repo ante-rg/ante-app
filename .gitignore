@@ -3,6 +3,7 @@
 *.csv
 !fixtures/**/*.csv
 artifacts/
+!/api/internal/artifacts/
 data/
 
 # Secrets

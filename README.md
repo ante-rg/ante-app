@@ -19,12 +19,26 @@ make up     # full stack in Docker, built from source, on :8080
 make test   # Go, Python and web tests
 make lint   # golangci-lint, ruff, Biome and tsc
 make gen    # regenerate code from openapi.yaml and the sqlc queries
-cd api && go run ./cmd/fakeartifacts   # synthetic artifacts/dummy-v0 (git-ignored)
+make artifacts                 # synthetic artifacts/dummy-v0 (git-ignored)
+make load MODEL=dummy-v0       # load artifacts/<version> into the local database
 ```
 
 `openapi.yaml` is the API contract: change it first, run `make gen`, then implement.
 
 See [CLAUDE.md](CLAUDE.md) for the project rules and conventions.
+
+## Load artifacts on the server
+
+The server database is not reachable from outside. Before copying the new `deploy/docker-compose.yml` to the server, set `POSTGRES_PORT=5434` in the server's `.env` (5432 is taken there), otherwise postgres fails to start. Open an SSH tunnel to its loopback-only Postgres port (5434 on the server) and run the loader through it:
+
+```
+ssh -i ~/.ssh/ante_server -N -L 15432:127.0.0.1:5434 <user>@<server>
+make load MODEL=<version> DATABASE_URL='postgres://postgres:<password>@localhost:15432/postgres?sslmode=disable'
+```
+
+The password is in the server's `.env` and never goes into the repository.
+
+Known limit: two datasets that share player IDs (`dummy-v0` and the TSI-100 baseline both use `S001` to `S100`) overwrite each other's activity, sessions and rule flags, so the inactive model's scores no longer match. Replacing a dataset cleanly is tracked in #25.
 
 ## Server
 
