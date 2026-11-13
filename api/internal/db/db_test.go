@@ -40,6 +40,8 @@ func seed(t *testing.T, tx pgx.Tx) {
 		`INSERT INTO models (model_version, card, is_active) VALUES ('test-v0', '{}', true)`,
 		`INSERT INTO daily_scores (model_version, player_id, day, score) VALUES
 		 ('test-v0', 'S001', 0, NULL), ('test-v0', 'S001', 1, 0.2), ('test-v0', 'S001', 2, 0.9)`,
+		`INSERT INTO daily_ranks (model_version, day, player_id, score, rank, band)
+		 VALUES ('test-v0', 1, 'S001', 0.2, 1, 'high')`,
 		`INSERT INTO daily_activity (player_id, day, deposits_n, deposits_eur, sessions_n, play_minutes,
 		 net_result_eur, chase_sessions_n, night_sessions_n, end_balance_eur)
 		 VALUES ('S001', 1, 1, 50, 1, 30, -20, 0, 0, 10)`,
@@ -115,7 +117,7 @@ func TestSchema(t *testing.T) {
 			t.Fatal(err)
 		}
 		want := []string{"operators", "players", "models", "daily_scores", "daily_activity", "sessions",
-			"rule_flags", "review_sample", "audit_log", "goose_db_version"}
+			"rule_flags", "review_sample", "audit_log", "daily_ranks", "goose_db_version"}
 		slices.Sort(got)
 		slices.Sort(want)
 		if !slices.Equal(got, want) {
@@ -176,7 +178,7 @@ func TestSchema(t *testing.T) {
 			if _, err := tx.Exec(ctx, `DELETE FROM models WHERE model_version = 'test-v0'`); err != nil {
 				t.Fatal(err)
 			}
-			for _, tbl := range []string{"daily_scores", "review_sample"} {
+			for _, tbl := range []string{"daily_scores", "review_sample", "daily_ranks"} {
 				if n := count(t, tx, `SELECT count(*) FROM `+tbl); n != 0 {
 					t.Errorf("%s has %d rows, want 0", tbl, n)
 				}
@@ -189,7 +191,7 @@ func TestSchema(t *testing.T) {
 			if _, err := tx.Exec(ctx, `DELETE FROM players WHERE player_id = 'S001'`); err != nil {
 				t.Fatal(err)
 			}
-			for _, tbl := range []string{"daily_scores", "daily_activity", "sessions", "rule_flags", "review_sample"} {
+			for _, tbl := range []string{"daily_scores", "daily_activity", "sessions", "rule_flags", "review_sample", "daily_ranks"} {
 				if n := count(t, tx, `SELECT count(*) FROM `+tbl+` WHERE player_id = 'S001'`); n != 0 {
 					t.Errorf("%s has %d rows, want 0", tbl, n)
 				}

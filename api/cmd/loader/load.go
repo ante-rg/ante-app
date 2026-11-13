@@ -151,6 +151,9 @@ func load(ctx context.Context, pool *pgxpool.Pool, f *artifacts.Folder) (map[str
 		f.Sample, func(s artifacts.Sample) []any { return []any{f.ModelVersion, s.PlayerID, s.Source, s.Position} }); err != nil {
 		return nil, err
 	}
+	if n["daily_ranks"], err = q.FillDailyRanks(ctx, f.ModelVersion); err != nil {
+		return nil, dbErr("daily_ranks", err)
+	}
 
 	if err := tx.Commit(ctx); err != nil {
 		return nil, dbErr("commit", err)

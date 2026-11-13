@@ -58,7 +58,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, stderr 
 	if err != nil {
 		return err
 	}
-	for _, t := range []string{"players", "daily_scores", "daily_activity", "sessions", "rule_flags", "review_sample"} {
+	for _, t := range []string{"players", "daily_scores", "daily_activity", "sessions", "rule_flags", "review_sample", "daily_ranks"} {
 		_, _ = fmt.Fprintf(stderr, "%s %d rows\n", t, n[t])
 	}
 	_, _ = fmt.Fprintf(stderr, "active model: %s\n", f.ModelVersion)

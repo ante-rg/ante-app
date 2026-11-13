@@ -114,7 +114,7 @@ func TestHealth_DatabaseDown(t *testing.T) {
 
 func TestUnimplemented_Returns501(t *testing.T) {
 	srv := &apihttp.Server{DB: newPool(t, "postgres://x:x@127.0.0.1:1/x"), Client: http.DefaultClient}
-	rec, body := get(t, srv, "/api/v1/replay")
+	rec, body := get(t, srv, "/api/v1/operators")
 	if rec.Code != 501 || body["code"] != "not_implemented" || body["message"] != "Not implemented yet" {
 		t.Fatalf("got %d %v", rec.Code, body)
 	}

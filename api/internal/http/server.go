@@ -11,6 +11,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/ante-rg/ante-app/api/internal/gen"
+	"github.com/ante-rg/ante-app/api/internal/store"
 )
 
 var errNotImplemented = errors.New("not implemented")
@@ -19,8 +20,13 @@ type Pinger interface {
 	Ping(ctx context.Context) error
 }
 
+type DB interface {
+	Pinger
+	store.DBTX
+}
+
 type Server struct {
-	DB        Pinger
+	DB        DB
 	ScorerURL string
 	Client    *http.Client
 	Version   string
@@ -64,22 +70,6 @@ func responseError(w http.ResponseWriter, _ *http.Request, err error) {
 		slog.Error("handler failed", "err", err)
 	}
 	writeError(w, status, body)
-}
-
-func (s *Server) GetReplay(context.Context, gen.GetReplayRequestObject) (gen.GetReplayResponseObject, error) {
-	return nil, errNotImplemented
-}
-
-func (s *Server) GetQueue(context.Context, gen.GetQueueRequestObject) (gen.GetQueueResponseObject, error) {
-	return nil, errNotImplemented
-}
-
-func (s *Server) GetPlayer(context.Context, gen.GetPlayerRequestObject) (gen.GetPlayerResponseObject, error) {
-	return nil, errNotImplemented
-}
-
-func (s *Server) GetPlayerTimeline(context.Context, gen.GetPlayerTimelineRequestObject) (gen.GetPlayerTimelineResponseObject, error) {
-	return nil, errNotImplemented
 }
 
 func (s *Server) ListPlayerSessions(context.Context, gen.ListPlayerSessionsRequestObject) (gen.ListPlayerSessionsResponseObject, error) {
