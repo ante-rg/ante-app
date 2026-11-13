@@ -15,7 +15,7 @@ import (
 	"github.com/ante-rg/ante-app/api/internal/testdb"
 )
 
-var tables = []string{"operators", "players", "models", "daily_scores", "daily_activity", "sessions", "rule_flags", "review_sample"}
+var tables = []string{"operators", "players", "models", "daily_scores", "daily_activity", "sessions", "rule_flags", "review_sample", "daily_ranks"}
 
 func newPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
@@ -109,6 +109,28 @@ func TestLoad_DummyV0(t *testing.T) {
 	}
 	if a := activeVersions(t, pool); len(a) != 1 || a[0] != "dummy-v0" {
 		t.Errorf("active = %v", a)
+	}
+	var wantRanks, maxDay int64
+	if err := pool.QueryRow(context.Background(), `SELECT count(*), max(last_day) FROM players`).Scan(&wantRanks, &maxDay); err != nil {
+		t.Fatal(err)
+	}
+	wantRanks *= maxDay + 1
+	var gotRanks int64
+	if err := pool.QueryRow(context.Background(), `SELECT count(*) FROM daily_ranks`).Scan(&gotRanks); err != nil {
+		t.Fatal(err)
+	}
+	if gotRanks != wantRanks || n["daily_ranks"] != wantRanks {
+		t.Errorf("daily_ranks: table %d, returned %d, want %d", gotRanks, n["daily_ranks"], wantRanks)
+	}
+	var high, elevated, low, ranked int64
+	if err := pool.QueryRow(context.Background(), `SELECT
+		count(*) FILTER (WHERE band = 'high'), count(*) FILTER (WHERE band = 'elevated'),
+		count(*) FILTER (WHERE band = 'low'), count(rank)
+		FROM daily_ranks WHERE day = 120`).Scan(&high, &elevated, &low, &ranked); err != nil {
+		t.Fatal(err)
+	}
+	if high != 10 || elevated != 10 || low != ranked-20 {
+		t.Errorf("day 120 bands = %d/%d/%d of %d ranked, want 10/10/%d", high, elevated, low, ranked, ranked-20)
 	}
 	var bad int
 	if err := pool.QueryRow(context.Background(),
