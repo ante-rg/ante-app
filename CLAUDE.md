@@ -61,8 +61,10 @@ Entries marked "(later)" do not exist yet.
 ```
 api/            Go module (github.com/ante-rg/ante-app/api)
   cmd/api/        HTTP server, also serves web/dist
-  cmd/loader/     (later) loads artifacts/<model_version>/ into Postgres, reads parquet
-  cmd/fakeartifacts/ writes dummy artifacts for development
+  cmd/loader/     loads artifacts/<model_version>/ into Postgres, reads parquet
+  cmd/fakeartifacts/ CLI that writes dummy artifacts for development
+  internal/artifacts/ opens and validates an artifacts folder
+  internal/fakeartifacts/ generator behind cmd/fakeartifacts
   internal/config/ environment config
   internal/db/    pgx pool, goose migrations applied on start
   internal/gen/   oapi-codegen output. Never edit by hand.
@@ -102,9 +104,11 @@ make gen          # oapi-codegen, openapi-typescript and sqlc
 make test         # go test ./..., pytest, vitest
 make lint         # golangci-lint v2.15.0 (go run), ruff check + format check, Biome + tsc --noEmit
 make build        # build the compose images from source
+make artifacts    # write dummy artifacts to artifacts/dummy-v0
+make load MODEL=<version>  # load artifacts/<version> into Postgres (DATABASE_URL overrides the target)
 ```
 
-`make contract` (contract test: ingest fixtures, compare scores with expected) and `make load MODEL=<version>` (run the loader against `artifacts/<version>`) are added by later tasks. `make gen` also runs sqlc.
+`make contract` (contract test: ingest fixtures, compare scores with expected) is added by a later task. `make gen` also runs sqlc.
 
 Run `make gen` after any change to `openapi.yaml`, `api/migrations/*.sql` or `api/internal/store/queries/*.sql`, and commit the generated code.
 

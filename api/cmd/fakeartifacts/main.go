@@ -9,6 +9,8 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+
+	"github.com/ante-rg/ante-app/api/internal/fakeartifacts"
 )
 
 func main() {
@@ -50,8 +52,8 @@ func run(args []string, stderr io.Writer) error {
 	if err := os.Chmod(tmp, 0o755); err != nil {
 		return fmt.Errorf("chmod %s: %w", tmp, err)
 	}
-	ds := Generate(*seed)
-	if err := Write(tmp, filepath.Base(dir), ds); err != nil {
+	ds := fakeartifacts.Generate(*seed)
+	if err := fakeartifacts.Write(tmp, filepath.Base(dir), ds); err != nil {
 		return err
 	}
 	if err := os.RemoveAll(dir); err != nil {

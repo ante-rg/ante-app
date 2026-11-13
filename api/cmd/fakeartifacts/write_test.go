@@ -9,6 +9,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/ante-rg/ante-app/api/internal/fakeartifacts"
 	"github.com/parquet-go/parquet-go"
 )
 
@@ -46,7 +47,7 @@ func TestRun_WritesAllFiles(t *testing.T) {
 	if err := run([]string{"-out", dir, "-seed", "1"}, io.Discard); err != nil {
 		t.Fatal(err)
 	}
-	ds := Generate(1)
+	ds := fakeartifacts.Generate(1)
 	wantRows := map[string]int{
 		"players": len(ds.Players), "daily_scores": len(ds.Scores), "daily_activity": len(ds.Activity),
 		"sessions": len(ds.Sessions), "rule_flags": len(ds.RuleFlags), "review_sample": len(ds.Sample),
@@ -84,7 +85,7 @@ func TestRun_WritesAllFiles(t *testing.T) {
 		t.Errorf("first row = %+v, want null score and []", rows[0])
 	}
 	i := slices.IndexFunc(rows, func(r scoreRow) bool { return r.Day == 7 })
-	var rs []Reason
+	var rs []fakeartifacts.Reason
 	if err := json.Unmarshal([]byte(rows[i].Reasons), &rs); err != nil || len(rs) != 3 || rows[i].Score == nil {
 		t.Errorf("day 7 row = %+v (err %v), want score and 3 reasons", rows[i], err)
 	}

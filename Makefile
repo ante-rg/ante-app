@@ -1,9 +1,11 @@
 # base compose file requires the password even when local.yml overrides it
 export POSTGRES_PASSWORD ?= ante
+export POSTGRES_PORT ?= 5432
+DATABASE_URL ?= postgres://postgres:$(POSTGRES_PASSWORD)@localhost:$(POSTGRES_PORT)/postgres?sslmode=disable
 COMPOSE := docker compose -f deploy/docker-compose.yml -f deploy/local.yml
 LINT_GO := go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0
 
-.PHONY: dev up gen lint test build
+.PHONY: dev up gen lint test build artifacts load
 
 gen:
 	cd api && go tool oapi-codegen -config oapi-codegen.yaml ../openapi.yaml
@@ -29,6 +31,13 @@ up:
 dev:
 	$(COMPOSE) up -d --wait postgres scorer
 	trap 'kill 0' INT TERM EXIT; \
-	(cd api && DATABASE_URL='postgres://postgres:$(POSTGRES_PASSWORD)@localhost:5432/postgres?sslmode=disable' SCORER_URL=http://localhost:8000 go run ./cmd/api) & \
+	(cd api && DATABASE_URL='postgres://postgres:$(POSTGRES_PASSWORD)@localhost:$(POSTGRES_PORT)/postgres?sslmode=disable' SCORER_URL=http://localhost:8000 go run ./cmd/api) & \
 	(cd web && npm run dev) & \
 	wait
+
+artifacts:
+	cd api && go run ./cmd/fakeartifacts
+
+load:
+	@test -n "$(MODEL)" || { echo "usage: make load MODEL=<version> [DATABASE_URL=...]"; exit 2; }
+	@cd api && DATABASE_URL='$(DATABASE_URL)' go run ./cmd/loader -dir ../artifacts/$(MODEL)
