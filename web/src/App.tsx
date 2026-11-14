@@ -1,23 +1,13 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { createBrowserRouter, Outlet, RouterProvider } from 'react-router';
-import { Health } from './screens/Health';
+import { createBrowserRouter, RouterProvider } from 'react-router';
+import { ApiError } from './api/client';
+import { routes } from './routes';
 
-const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1 } } });
+const queryClient = new QueryClient({
+  defaultOptions: { queries: { retry: (n, e) => !(e instanceof ApiError && e.status === 404) && n < 1 } },
+});
 
-function Layout() {
-  return (
-    <>
-      <header className="app-header">
-        <h1>Ante</h1>
-      </header>
-      <main>
-        <Outlet />
-      </main>
-    </>
-  );
-}
-
-const router = createBrowserRouter([{ element: <Layout />, children: [{ path: '/', element: <Health /> }] }]);
+const router = createBrowserRouter(routes);
 
 export function App() {
   return (
