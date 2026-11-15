@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { type KeyboardEvent, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router';
+import { useLocation, useNavigate, useSearchParams } from 'react-router';
 import { getQueue, type Queue, type QueueItem } from '../api/client';
 import { BandChip } from '../components/BandChip';
 import { Sparkline } from '../components/Sparkline';
@@ -62,7 +62,9 @@ function Population({ counts, day }: { counts: Queue['counts']; day: number }) {
 
 function Row({ item, day }: { item: QueueItem; day: number }) {
   const navigate = useNavigate();
-  const open = () => navigate(`/players/${encodeURIComponent(item.player_id)}?day=${day}`);
+  const { search } = useLocation();
+  const open = () =>
+    navigate(`/players/${encodeURIComponent(item.player_id)}?day=${day}`, { state: { queueSearch: search } });
   const onKeyDown = (e: KeyboardEvent<HTMLTableRowElement>) => {
     if (e.metaKey || e.ctrlKey || e.altKey) return;
     if (e.key === 'Enter') return open();

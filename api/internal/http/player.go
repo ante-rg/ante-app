@@ -135,7 +135,7 @@ func (s *Server) GetPlayerTimeline(ctx context.Context, req gen.GetPlayerTimelin
 		return nil, err
 	}
 	rows, err := store.New(s.DB).ListTimelineDays(ctx, store.ListTimelineDaysParams{
-		ModelVersion: m.Version, PlayerID: r.PlayerID, EffectiveDay: min(day, r.LastDay),
+		PlayerID: r.PlayerID, EffectiveDay: min(day, r.LastDay),
 	})
 	if err != nil {
 		return nil, err
@@ -155,16 +155,26 @@ func (s *Server) GetPlayerTimeline(ctx context.Context, req gen.GetPlayerTimelin
 		if a.EndBalanceEur.Valid {
 			d.EndBalanceEur = &a.EndBalanceEur.Float64
 		}
-		if a.Score.Valid {
-			d.Score = &a.Score.Float32
-		}
-		if a.Band.Valid {
-			d.Band = new(gen.Band(a.Band.String))
-		}
 		days[i] = d
 	}
+	srows, err := store.New(s.DB).ListTimelineScores(ctx, store.ListTimelineScoresParams{
+		ModelVersion: m.Version, PlayerID: r.PlayerID, EffectiveDay: min(day, r.LastDay),
+	})
+	if err != nil {
+		return nil, err
+	}
+	scores := make([]gen.TimelineScore, len(srows))
+	for i, x := range srows {
+		scores[i] = gen.TimelineScore{Day: int(x.Day)}
+		if x.Score.Valid {
+			scores[i].Score = &x.Score.Float32
+		}
+		if x.Band.Valid {
+			scores[i].Band = new(gen.Band(x.Band.String))
+		}
+	}
 	return gen.GetPlayerTimeline200JSONResponse(gen.Timeline{
-		PlayerId: r.PlayerID, AsOfDay: int(day), Days: days,
+		PlayerId: r.PlayerID, AsOfDay: int(day), Days: days, Scores: scores,
 		FirstHighDay: dayPtr(r.FirstHighDay), FirstRuleFlagDay: dayPtr(r.FirstRuleFlagDay),
 		Meta: m.meta(m.Card.DefaultCapacity),
 	}), nil

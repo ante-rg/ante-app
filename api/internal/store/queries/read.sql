@@ -62,9 +62,13 @@ ORDER BY min(f.day), f.rule_id;
 
 -- name: ListTimelineDays :many
 SELECT a.day, a.deposits_n, a.deposits_eur, a.sessions_n, a.play_minutes, a.net_result_eur,
-       a.chase_sessions_n, a.night_sessions_n, a.end_balance_eur, s.score, r.band AS band
+       a.chase_sessions_n, a.night_sessions_n, a.end_balance_eur
 FROM daily_activity a
-LEFT JOIN daily_scores s ON s.model_version = @model_version AND s.player_id = a.player_id AND s.day = a.day
-LEFT JOIN daily_ranks r ON r.model_version = @model_version AND r.player_id = a.player_id AND r.day = a.day
 WHERE a.player_id = @player_id AND a.day <= @effective_day
 ORDER BY a.day;
+
+-- name: ListTimelineScores :many
+SELECT g.day::int AS day, r.score, r.band
+FROM generate_series(0, @effective_day::int) AS g(day)
+LEFT JOIN daily_ranks r ON r.model_version = @model_version AND r.player_id = @player_id AND r.day = g.day
+ORDER BY g.day;

@@ -141,17 +141,30 @@ func TestPlayer(t *testing.T) {
 		}
 		want := []struct {
 			day, dep, eur float64
-			play, score   float64
-			band          string
-		}{{1, 1, 100, 30.5, 0.10, "low"}, {3, 2, 200, 45, 0.95, "high"}, {5, 3, 300, 90.25, 0.95, "high"}}
+			play          float64
+		}{{1, 1, 100, 30.5}, {3, 2, 200, 45}, {5, 3, 300, 90.25}}
 		for i, w := range want {
 			d := days[i].(map[string]any)
 			eq(t, "day", d["day"], w.day)
 			eq(t, "deposits_n", d["deposits_n"], w.dep)
 			eq(t, "deposits_eur", d["deposits_eur"], w.eur)
 			near(t, "play_minutes", d["play_minutes"], w.play)
-			near(t, "score", d["score"], w.score)
-			eq(t, "band", d["band"], w.band)
+			if _, ok := d["score"]; ok {
+				t.Errorf("day has score key: %v", d)
+			}
+		}
+		scores, _ := b["scores"].([]any)
+		if len(scores) != 6 {
+			t.Fatalf("scores = %v", b["scores"])
+		}
+		for i, w := range []struct {
+			score float64
+			band  string
+		}{{0.10, "low"}, {0.10, "low"}, {0.95, "high"}, {0.95, "high"}, {0.95, "high"}, {0.95, "high"}} {
+			s := scores[i].(map[string]any)
+			eq(t, "day", s["day"], float64(i))
+			near(t, "score", s["score"], w.score)
+			eq(t, "band", s["band"], w.band)
 		}
 		eq(t, "day1 end_balance_eur", days[0].(map[string]any)["end_balance_eur"], 250.0)
 		eq(t, "day3 end_balance_eur", days[1].(map[string]any)["end_balance_eur"], nil)
@@ -168,7 +181,13 @@ func TestPlayer(t *testing.T) {
 		if strings.Contains(string(raw), "9999") || strings.Contains(string(raw), `"day":6`) {
 			t.Errorf("timeline leaks day 6: %s", raw)
 		}
+		if strings.Contains(string(raw), "0.999") {
+			t.Errorf("timeline leaks day 6 score: %s", raw)
+		}
 		b := okGet(t, s, "/api/v1/players/S99/timeline?as_of_day=6")
+		if sc, _ := b["scores"].([]any); len(sc) != 4 || sc[3].(map[string]any)["day"] != 3.0 {
+			t.Errorf("scores = %v, want 4 ending day 3", b["scores"])
+		}
 		days, _ := b["days"].([]any)
 		if len(days) != 2 || days[0].(map[string]any)["day"] != 2.0 || days[1].(map[string]any)["day"] != 3.0 {
 			t.Errorf("days = %v, want days 2 and 3 ascending", b["days"])
@@ -189,11 +208,21 @@ func TestPlayer_FirstHighIgnoresDaysAfterEffective(t *testing.T) {
 func TestPlayer_AllNullScores(t *testing.T) {
 	f := playerFixture()
 	f.Players[1].Scores = make([]*float64, 7)
-	b := okGet(t, serve(t, f), "/api/v1/players/S02?as_of_day=5")
+	s := serve(t, f)
+	b := okGet(t, s, "/api/v1/players/S02?as_of_day=5")
 	eq(t, "band", b["band"], "insufficient_data")
 	eq(t, "score", b["score"], nil)
 	eq(t, "rank", b["rank"], nil)
 	eq(t, "first_high_day", b["first_high_day"], nil)
+	tl := okGet(t, s, "/api/v1/players/S02/timeline?as_of_day=5")
+	scores, _ := tl["scores"].([]any)
+	if len(scores) != 6 {
+		t.Fatalf("scores = %v", tl["scores"])
+	}
+	for _, x := range scores {
+		eq(t, "score", x.(map[string]any)["score"], nil)
+		eq(t, "band", x.(map[string]any)["band"], "insufficient_data")
+	}
 }
 
 func TestPlayer_NoRanks(t *testing.T) {

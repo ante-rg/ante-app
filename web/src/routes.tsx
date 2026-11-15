@@ -2,7 +2,8 @@ import { Link, Outlet, type RouteObject, useLocation } from 'react-router';
 import { ReplayControl } from './replay/ReplayControl';
 import { ReplayDayProvider, ReplayGate, useOptionalReplayDay } from './replay/ReplayDay';
 import { Health } from './screens/Health';
-import { Placeholder, PlayerPlaceholder } from './screens/Placeholder';
+import { Placeholder } from './screens/Placeholder';
+import { PlayerCaseScreen } from './screens/PlayerCase';
 import { QueueScreen } from './screens/Queue';
 
 const NAV = [
@@ -61,7 +62,7 @@ export const routes: RouteObject[] = [
     element: <Layout />,
     children: [
       { path: '/', element: <QueueScreen /> },
-      { path: '/players/:playerId', element: <PlayerPlaceholder /> },
+      { path: '/players/:playerId', element: <PlayerCaseScreen /> },
       { path: '/operators', element: <Placeholder title="Operators" /> },
       { path: '/about', element: <Placeholder title="About the score" /> },
     ],

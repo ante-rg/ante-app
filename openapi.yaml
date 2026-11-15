@@ -431,12 +431,18 @@ components:
         chase_sessions_n: { type: integer }
         night_sessions_n: { type: integer }
         end_balance_eur: { type: [number, "null"], format: double }
+
+    TimelineScore:
+      type: object
+      required: [day, score]
+      properties:
+        day: { type: integer }
         score: { type: [number, "null"] }
         band: { $ref: "#/components/schemas/Band" }
 
     Timeline:
       type: object
-      required: [player_id, as_of_day, days, meta]
+      required: [player_id, as_of_day, days, scores, meta]
       properties:
         player_id: { type: string }
         as_of_day: { type: integer }
@@ -446,6 +452,10 @@ components:
           type: array
           description: Only days with activity; the client fills gaps with zero.
           items: { $ref: "#/components/schemas/TimelineDay" }
+        scores:
+          type: array
+          description: One entry per day 0..effective day, ascending. Score is null where the model gave none.
+          items: { $ref: "#/components/schemas/TimelineScore" }
         meta: { $ref: "#/components/schemas/Meta" }
 
     Session:

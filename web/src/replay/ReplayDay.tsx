@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo } from 'react';
-import { useSearchParams } from 'react-router';
+import { useLocation, useSearchParams } from 'react-router';
 import { ApiError, getReplay, type Replay } from '../api/client';
 
 type ReplayDay = {
@@ -32,6 +32,7 @@ export function useReplayDay(): ReplayDay {
 
 function Loaded({ replay, children }: { replay: Replay; children: ReactNode }) {
   const [params, setParams] = useSearchParams();
+  const { state } = useLocation();
   const { min_day: minDay, max_day: maxDay, default_day: defaultDay } = replay;
   const clamp = useCallback((n: number) => Math.min(maxDay, Math.max(minDay, n)), [minDay, maxDay]);
 
@@ -47,9 +48,9 @@ function Loaded({ replay, children }: { replay: Replay; children: ReactNode }) {
           next.set('day', String(clamp(n)));
           return next;
         },
-        { replace: true },
+        { replace: true, state },
       ),
-    [clamp, setParams],
+    [clamp, setParams, state],
   );
 
   useEffect(() => {

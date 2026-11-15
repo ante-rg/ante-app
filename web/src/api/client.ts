@@ -4,6 +4,10 @@ export type Health = components['schemas']['Health'];
 export type Replay = components['schemas']['Replay'];
 export type Queue = components['schemas']['Queue'];
 export type QueueItem = components['schemas']['QueueItem'];
+export type PlayerCase = components['schemas']['PlayerCase'];
+export type Timeline = components['schemas']['Timeline'];
+export type TimelineDay = components['schemas']['TimelineDay'];
+export type TimelineScore = components['schemas']['TimelineScore'];
 export type Band = components['schemas']['Band'];
 
 export class ApiError extends Error {
@@ -49,4 +53,12 @@ export function getQueue(p: QueueParams, signal?: AbortSignal): Promise<Queue> {
   if (p.band) q.set('band', p.band);
   if (p.capacity !== undefined) q.set('capacity', String(p.capacity));
   return getJSON<Queue>(`/api/v1/queue?${q}`, signal);
+}
+
+export function getPlayer(id: string, asOfDay: number, signal?: AbortSignal): Promise<PlayerCase> {
+  return getJSON<PlayerCase>(`/api/v1/players/${encodeURIComponent(id)}?as_of_day=${asOfDay}`, signal);
+}
+
+export function getTimeline(id: string, asOfDay: number, signal?: AbortSignal): Promise<Timeline> {
+  return getJSON<Timeline>(`/api/v1/players/${encodeURIComponent(id)}/timeline?as_of_day=${asOfDay}`, signal);
 }
