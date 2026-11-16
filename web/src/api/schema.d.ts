@@ -207,6 +207,13 @@ export interface components {
              */
             weight: number;
         };
+        Meta: {
+            model_version: string;
+            dataset_version: string | null;
+            feature_set_version: string | null;
+            /** @description Review capacity in use: the request's capacity on the queue, the default elsewhere */
+            capacity: number;
+        };
         Replay: {
             /** @example 0 */
             min_day: number;
@@ -216,6 +223,7 @@ export interface components {
             default_day: number;
             /** @example v0.3.0 */
             model_version: string;
+            meta: components["schemas"]["Meta"];
         };
         QueueItem: {
             player_id: string;
@@ -253,6 +261,7 @@ export interface components {
                 new_high_since_previous_day?: number;
             };
             items: components["schemas"]["QueueItem"][];
+            meta: components["schemas"]["Meta"];
         };
         PlayerCase: {
             player_id: string;
@@ -263,6 +272,7 @@ export interface components {
             days_observed: number;
             sessions_to_date: number;
             deposits_to_date: number;
+            /** Format: double */
             deposits_eur_to_date?: number;
             score?: number | null;
             band?: components["schemas"]["Band"];
@@ -279,18 +289,26 @@ export interface components {
                 text: string;
                 first_day: number;
             }[];
+            meta: components["schemas"]["Meta"];
         };
         TimelineDay: {
             day: number;
             deposits_n?: number;
+            /** Format: double */
             deposits_eur?: number;
             sessions_n?: number;
+            /** Format: double */
             play_minutes?: number;
+            /** Format: double */
             net_result_eur?: number;
             chase_sessions_n?: number;
             night_sessions_n?: number;
+            /** Format: double */
             end_balance_eur?: number | null;
-            score?: number | null;
+        };
+        TimelineScore: {
+            day: number;
+            score: number | null;
             band?: components["schemas"]["Band"];
         };
         Timeline: {
@@ -300,13 +318,18 @@ export interface components {
             first_rule_flag_day?: number | null;
             /** @description Only days with activity; the client fills gaps with zero. */
             days: components["schemas"]["TimelineDay"][];
+            /** @description One entry per day 0..effective day, ascending. Score is null where the model gave none. */
+            scores: components["schemas"]["TimelineScore"][];
+            meta: components["schemas"]["Meta"];
         };
         Session: {
             session_no: number;
             start_day: number;
             duration_s: number;
             deposits_n: number;
+            /** Format: double */
             deposits_eur: number;
+            /** Format: double */
             net_result_eur: number;
             is_night: boolean;
             /** @description Session of 2 h or more, 3 or more deposits, net loss */
@@ -437,8 +460,17 @@ export interface components {
                 "application/json": components["schemas"]["Error"];
             };
         };
-        /** @description Request body failed validation */
+        /** @description Request failed validation */
         Invalid: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
+        /** @description Not implemented */
+        NotImplemented: {
             headers: {
                 [name: string]: unknown;
             };
@@ -487,6 +519,7 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
         };
     };
     getQueue: {
@@ -499,6 +532,8 @@ export interface operations {
                 /** @description Comma-separated. Ignored in blind mode. */
                 band?: string;
                 review_status?: "all" | "pending" | "reviewed";
+                /** @description Review capacity, the number of rows returned. Defaults to the model card's default_capacity, else 10. */
+                capacity?: number;
             };
             header?: never;
             path?: never;
@@ -515,7 +550,10 @@ export interface operations {
                     "application/json": components["schemas"]["Queue"];
                 };
             };
+            400: components["responses"]["Invalid"];
             401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            501: components["responses"]["NotImplemented"];
         };
     };
     getPlayer: {
@@ -542,8 +580,10 @@ export interface operations {
                     "application/json": components["schemas"]["PlayerCase"];
                 };
             };
+            400: components["responses"]["Invalid"];
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
+            501: components["responses"]["NotImplemented"];
         };
     };
     getPlayerTimeline: {
@@ -569,6 +609,7 @@ export interface operations {
                     "application/json": components["schemas"]["Timeline"];
                 };
             };
+            400: components["responses"]["Invalid"];
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
         };
