@@ -424,6 +424,15 @@ type IngestResult struct {
 	Score          *float32  `json:"score"`
 }
 
+// Meta defines model for Meta.
+type Meta struct {
+	// Capacity Review capacity in use: the request's capacity on the queue, the default elsewhere
+	Capacity          int     `json:"capacity"`
+	DatasetVersion    *string `json:"dataset_version"`
+	FeatureSetVersion *string `json:"feature_set_version"`
+	ModelVersion      string  `json:"model_version"`
+}
+
 // ModelCard defines model for ModelCard.
 type ModelCard struct {
 	LabelDefinition *string  `json:"label_definition,omitempty"`
@@ -477,7 +486,7 @@ type PlayerCase struct {
 	AsOfDay           int      `json:"as_of_day"`
 	Band              *Band    `json:"band,omitempty"`
 	DaysObserved      int      `json:"days_observed"`
-	DepositsEurToDate *float32 `json:"deposits_eur_to_date,omitempty"`
+	DepositsEurToDate *float64 `json:"deposits_eur_to_date,omitempty"`
 	DepositsToDate    int      `json:"deposits_to_date"`
 	EffectiveDay      int      `json:"effective_day"`
 
@@ -487,6 +496,7 @@ type PlayerCase struct {
 	// FirstRuleFlagDay First day any fixed rule fired
 	FirstRuleFlagDay  *int         `json:"first_rule_flag_day,omitempty"`
 	HistoryEndedOnDay *int         `json:"history_ended_on_day,omitempty"`
+	Meta              Meta         `json:"meta"`
 	OperatorCode      OperatorCode `json:"operator_code"`
 	PlayerId          string       `json:"player_id"`
 	Rank              *int         `json:"rank,omitempty"`
@@ -515,6 +525,7 @@ type Queue struct {
 		PendingReview           *int `json:"pending_review,omitempty"`
 	} `json:"counts"`
 	Items []QueueItem `json:"items"`
+	Meta  Meta        `json:"meta"`
 	Mode  QueueMode   `json:"mode"`
 }
 
@@ -566,6 +577,7 @@ type Reason struct {
 type Replay struct {
 	DefaultDay   int    `json:"default_day"`
 	MaxDay       int    `json:"max_day"`
+	Meta         Meta   `json:"meta"`
 	MinDay       int    `json:"min_day"`
 	ModelVersion string `json:"model_version"`
 }
@@ -596,14 +608,14 @@ type ReviewCreateMode string
 
 // Session defines model for Session.
 type Session struct {
-	DepositsEur float32 `json:"deposits_eur"`
+	DepositsEur float64 `json:"deposits_eur"`
 	DepositsN   int     `json:"deposits_n"`
 	DurationS   int     `json:"duration_s"`
 
 	// IsChase Session of 2 h or more, 3 or more deposits, net loss
 	IsChase      bool    `json:"is_chase"`
 	IsNight      bool    `json:"is_night"`
-	NetResultEur float32 `json:"net_result_eur"`
+	NetResultEur float64 `json:"net_result_eur"`
 	SessionNo    int     `json:"session_no"`
 	StartDay     int     `json:"start_day"`
 }
@@ -622,6 +634,7 @@ type Timeline struct {
 	Days             []TimelineDay `json:"days"`
 	FirstHighDay     *int          `json:"first_high_day,omitempty"`
 	FirstRuleFlagDay *int          `json:"first_rule_flag_day,omitempty"`
+	Meta             Meta          `json:"meta"`
 	PlayerId         string        `json:"player_id"`
 }
 
@@ -630,12 +643,12 @@ type TimelineDay struct {
 	Band           *Band    `json:"band,omitempty"`
 	ChaseSessionsN *int     `json:"chase_sessions_n,omitempty"`
 	Day            int      `json:"day"`
-	DepositsEur    *float32 `json:"deposits_eur,omitempty"`
+	DepositsEur    *float64 `json:"deposits_eur,omitempty"`
 	DepositsN      *int     `json:"deposits_n,omitempty"`
-	EndBalanceEur  *float32 `json:"end_balance_eur,omitempty"`
-	NetResultEur   *float32 `json:"net_result_eur,omitempty"`
+	EndBalanceEur  *float64 `json:"end_balance_eur,omitempty"`
+	NetResultEur   *float64 `json:"net_result_eur,omitempty"`
 	NightSessionsN *int     `json:"night_sessions_n,omitempty"`
-	PlayMinutes    *int     `json:"play_minutes,omitempty"`
+	PlayMinutes    *float64 `json:"play_minutes,omitempty"`
 	Score          *float32 `json:"score,omitempty"`
 	SessionsN      *int     `json:"sessions_n,omitempty"`
 }
@@ -654,6 +667,9 @@ type Invalid = Error
 
 // NotFound defines model for NotFound.
 type NotFound = Error
+
+// NotImplemented defines model for NotImplemented.
+type NotImplemented = Error
 
 // Unauthorized defines model for Unauthorized.
 type Unauthorized = Error
@@ -700,6 +716,9 @@ type GetQueueParams struct {
 	// Band Comma-separated. Ignored in blind mode.
 	Band         *string                     `form:"band,omitempty" json:"band,omitempty"`
 	ReviewStatus *GetQueueParamsReviewStatus `form:"review_status,omitempty" json:"review_status,omitempty"`
+
+	// Capacity Review capacity, the number of rows returned. Defaults to the model card's default_capacity, else 10.
+	Capacity *int `form:"capacity,omitempty" json:"capacity,omitempty"`
 }
 
 // GetQueueParamsMode defines parameters for GetQueue.
@@ -1410,6 +1429,19 @@ func (siw *ServerInterfaceWrapper) GetQueue(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	// ------------- Optional query parameter "capacity" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "capacity", r.URL.Query(), &params.Capacity, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "capacity"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "capacity", Err: err})
+		}
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetQueue(w, r, params)
 	}))
@@ -1617,6 +1649,8 @@ type InvalidJSONResponse Error
 
 type NotFoundJSONResponse Error
 
+type NotImplementedJSONResponse Error
+
 type UnauthorizedJSONResponse Error
 
 type GetModelCardRequestObject struct {
@@ -1688,6 +1722,20 @@ func (response GetPlayer200JSONResponse) VisitGetPlayerResponse(w http.ResponseW
 	return err
 }
 
+type GetPlayer400JSONResponse struct{ InvalidJSONResponse }
+
+func (response GetPlayer400JSONResponse) VisitGetPlayerResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetPlayer404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response GetPlayer404JSONResponse) VisitGetPlayerResponse(w http.ResponseWriter) error {
@@ -1698,6 +1746,20 @@ func (response GetPlayer404JSONResponse) VisitGetPlayerResponse(w http.ResponseW
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetPlayer501JSONResponse struct{ NotImplementedJSONResponse }
+
+func (response GetPlayer501JSONResponse) VisitGetPlayerResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(501)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -1837,6 +1899,20 @@ func (response GetPlayerTimeline200JSONResponse) VisitGetPlayerTimelineResponse(
 	return err
 }
 
+type GetPlayerTimeline400JSONResponse struct{ InvalidJSONResponse }
+
+func (response GetPlayerTimeline400JSONResponse) VisitGetPlayerTimelineResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetPlayerTimeline404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response GetPlayerTimeline404JSONResponse) VisitGetPlayerTimelineResponse(w http.ResponseWriter) error {
@@ -1873,6 +1949,48 @@ func (response GetQueue200JSONResponse) VisitGetQueueResponse(w http.ResponseWri
 	return err
 }
 
+type GetQueue400JSONResponse struct{ InvalidJSONResponse }
+
+func (response GetQueue400JSONResponse) VisitGetQueueResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetQueue404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetQueue404JSONResponse) VisitGetQueueResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetQueue501JSONResponse struct{ NotImplementedJSONResponse }
+
+func (response GetQueue501JSONResponse) VisitGetQueueResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(501)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetReplayRequestObject struct {
 }
 
@@ -1890,6 +2008,20 @@ func (response GetReplay200JSONResponse) VisitGetReplayResponse(w http.ResponseW
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetReplay404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetReplay404JSONResponse) VisitGetReplayResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
 	return err
 }

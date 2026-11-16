@@ -30,6 +30,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Replay" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   /api/v1/queue:
     get:
@@ -52,12 +53,19 @@ paths:
         - name: review_status
           in: query
           schema: { type: string, enum: [all, pending, reviewed], default: all }
+        - name: capacity
+          in: query
+          description: Review capacity, the number of rows returned. Defaults to the model card's default_capacity, else 10.
+          schema: { type: integer, minimum: 1, maximum: 1000 }
       responses:
         "200":
           description: OK
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Queue" }
+        "400": { $ref: "#/components/responses/Invalid" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "501": { $ref: "#/components/responses/NotImplemented" }
 
   /api/v1/players/{player_id}:
     get:
@@ -74,7 +82,9 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/PlayerCase" }
+        "400": { $ref: "#/components/responses/Invalid" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "501": { $ref: "#/components/responses/NotImplemented" }
 
   /api/v1/players/{player_id}/timeline:
     get:
@@ -90,6 +100,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Timeline" }
+        "400": { $ref: "#/components/responses/Invalid" }
         "404": { $ref: "#/components/responses/NotFound" }
 
   /api/v1/players/{player_id}/sessions:
@@ -275,7 +286,12 @@ components:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
     Invalid:
-      description: Request body failed validation
+      description: Request failed validation
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    NotImplemented:
+      description: Not implemented
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
@@ -307,14 +323,24 @@ components:
         text: { type: string, example: "Deposited 3 or more times in one losing session on 9 of the last 30 days" }
         weight: { type: number, description: "Share of the score explained, 0-1", example: 0.46 }
 
+    Meta:
+      type: object
+      required: [model_version, dataset_version, feature_set_version, capacity]
+      properties:
+        model_version: { type: string }
+        dataset_version: { type: [string, "null"] }
+        feature_set_version: { type: [string, "null"] }
+        capacity: { type: integer, description: "Review capacity in use: the request's capacity on the queue, the default elsewhere" }
+
     Replay:
       type: object
-      required: [min_day, max_day, default_day, model_version]
+      required: [min_day, max_day, default_day, model_version, meta]
       properties:
         min_day: { type: integer, example: 0 }
         max_day: { type: integer, example: 771 }
         default_day: { type: integer, example: 120 }
         model_version: { type: string, example: "v0.3.0" }
+        meta: { $ref: "#/components/schemas/Meta" }
 
     QueueItem:
       type: object
@@ -339,7 +365,7 @@ components:
 
     Queue:
       type: object
-      required: [as_of_day, mode, counts, items]
+      required: [as_of_day, mode, counts, items, meta]
       properties:
         as_of_day: { type: integer }
         mode: { type: string, enum: [normal, blind] }
@@ -356,10 +382,11 @@ components:
         items:
           type: array
           items: { $ref: "#/components/schemas/QueueItem" }
+        meta: { $ref: "#/components/schemas/Meta" }
 
     PlayerCase:
       type: object
-      required: [player_id, operator_code, as_of_day, effective_day, days_observed, sessions_to_date, deposits_to_date]
+      required: [player_id, operator_code, as_of_day, effective_day, days_observed, sessions_to_date, deposits_to_date, meta]
       properties:
         player_id: { type: string }
         operator_code: { $ref: "#/components/schemas/OperatorCode" }
@@ -369,7 +396,7 @@ components:
         days_observed: { type: integer }
         sessions_to_date: { type: integer }
         deposits_to_date: { type: integer }
-        deposits_eur_to_date: { type: number }
+        deposits_eur_to_date: { type: number, format: double }
         score: { type: [number, "null"] }
         band: { $ref: "#/components/schemas/Band" }
         rank: { type: integer }
@@ -389,6 +416,7 @@ components:
               rule_id: { type: string }
               text: { type: string }
               first_day: { type: integer }
+        meta: { $ref: "#/components/schemas/Meta" }
 
     TimelineDay:
       type: object
@@ -396,19 +424,19 @@ components:
       properties:
         day: { type: integer }
         deposits_n: { type: integer }
-        deposits_eur: { type: number }
+        deposits_eur: { type: number, format: double }
         sessions_n: { type: integer }
-        play_minutes: { type: integer }
-        net_result_eur: { type: number }
+        play_minutes: { type: number, format: double }
+        net_result_eur: { type: number, format: double }
         chase_sessions_n: { type: integer }
         night_sessions_n: { type: integer }
-        end_balance_eur: { type: [number, "null"] }
+        end_balance_eur: { type: [number, "null"], format: double }
         score: { type: [number, "null"] }
         band: { $ref: "#/components/schemas/Band" }
 
     Timeline:
       type: object
-      required: [player_id, as_of_day, days]
+      required: [player_id, as_of_day, days, meta]
       properties:
         player_id: { type: string }
         as_of_day: { type: integer }
@@ -418,6 +446,7 @@ components:
           type: array
           description: Only days with activity; the client fills gaps with zero.
           items: { $ref: "#/components/schemas/TimelineDay" }
+        meta: { $ref: "#/components/schemas/Meta" }
 
     Session:
       type: object
@@ -427,8 +456,8 @@ components:
         start_day: { type: integer }
         duration_s: { type: integer }
         deposits_n: { type: integer }
-        deposits_eur: { type: number }
-        net_result_eur: { type: number }
+        deposits_eur: { type: number, format: double }
+        net_result_eur: { type: number, format: double }
         is_night: { type: boolean }
         is_chase: { type: boolean, description: "Session of 2 h or more, 3 or more deposits, net loss" }
 

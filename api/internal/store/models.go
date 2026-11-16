@@ -30,6 +30,15 @@ type DailyActivity struct {
 	EndBalanceEur  pgtype.Float8
 }
 
+type DailyRank struct {
+	ModelVersion string
+	Day          int32
+	PlayerID     string
+	Score        pgtype.Float4
+	Rank         pgtype.Int4
+	Band         string
+}
+
 type DailyScore struct {
 	ModelVersion string
 	PlayerID     string
