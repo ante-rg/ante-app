@@ -30,6 +30,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Replay" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
 
   /api/v1/queue:
@@ -64,6 +65,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Queue" }
         "400": { $ref: "#/components/responses/Invalid" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
         "501": { $ref: "#/components/responses/NotImplemented" }
 
@@ -83,6 +85,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/PlayerCase" }
         "400": { $ref: "#/components/responses/Invalid" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
         "501": { $ref: "#/components/responses/NotImplemented" }
 
@@ -101,6 +104,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Timeline" }
         "400": { $ref: "#/components/responses/Invalid" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
 
   /api/v1/players/{player_id}/sessions:
@@ -124,6 +128,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/SessionPage" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
 
   /api/v1/players/{player_id}/reviews:
@@ -145,6 +150,7 @@ paths:
                   items:
                     type: array
                     items: { $ref: "#/components/schemas/Review" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
     post:
       tags: [reviews]
       summary: Save a review
@@ -163,6 +169,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Review" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/Invalid" }
 
@@ -186,6 +193,7 @@ paths:
                   items:
                     type: array
                     items: { $ref: "#/components/schemas/OperatorSummary" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
 
   /api/v1/model:
     get:
@@ -198,6 +206,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ModelCard" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
 
   /ingest/v1/events:
     post:
@@ -296,7 +305,7 @@ components:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
     Unauthorized:
-      description: Missing or unknown API key
+      description: Missing or invalid credentials
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }

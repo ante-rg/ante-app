@@ -66,3 +66,5 @@ docker compose pull && docker compose up -d   # manual deploy of :latest
 ```
 
 `deploy` only swaps images. A change to `deploy/docker-compose.yml` has to be copied to `~/ante/` by hand, followed by `docker compose up -d`. `.env` is created once on the server with `openssl rand -hex 24` for the database password and is never committed.
+
+`api` needs `CF_ACCESS_TEAM_DOMAIN` and `CF_ACCESS_AUD` in `~/ante/.env` (see `deploy/.env.example`) and exits on boot without them. Watchtower reuses the old container's environment, so after adding them copy the compose file and run `docker compose up -d api` before the next deploy. Then open `/api/v1/model` through Access: 501 means sign-in works, 401 means the team domain or AUD is wrong (`docker compose logs api | grep "auth rejected"`).
