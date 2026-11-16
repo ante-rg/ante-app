@@ -597,7 +597,7 @@ type Review struct {
 
 // ReviewCreate defines model for ReviewCreate.
 type ReviewCreate struct {
-	AsOfDay int              `json:"as_of_day"`
+	AsOfDay *int             `json:"as_of_day"`
 	Mode    ReviewCreateMode `json:"mode"`
 	Note    *string          `json:"note,omitempty"`
 	Outcome Outcome          `json:"outcome"`
@@ -697,6 +697,12 @@ type GetPlayerParams struct {
 
 // GetPlayerParamsMode defines parameters for GetPlayer.
 type GetPlayerParamsMode string
+
+// ListPlayerReviewsParams defines parameters for ListPlayerReviews.
+type ListPlayerReviewsParams struct {
+	// AsOfDay Days since each player's own first activity. Defaults to replay.default_day.
+	AsOfDay *AsOfDay `form:"as_of_day,omitempty" json:"as_of_day,omitempty"`
+}
 
 // ListPlayerSessionsParams defines parameters for ListPlayerSessions.
 type ListPlayerSessionsParams struct {
@@ -996,7 +1002,7 @@ type ServerInterface interface {
 	GetPlayer(w http.ResponseWriter, r *http.Request, playerId PlayerId, params GetPlayerParams)
 	// ListPlayerReviews All reviews of this player, newest first
 	// (GET /api/v1/players/{player_id}/reviews)
-	ListPlayerReviews(w http.ResponseWriter, r *http.Request, playerId PlayerId)
+	ListPlayerReviews(w http.ResponseWriter, r *http.Request, playerId PlayerId, params ListPlayerReviewsParams)
 	// CreateReview Save a review
 	// (POST /api/v1/players/{player_id}/reviews)
 	CreateReview(w http.ResponseWriter, r *http.Request, playerId PlayerId)
@@ -1044,7 +1050,7 @@ func (_ Unimplemented) GetPlayer(w http.ResponseWriter, r *http.Request, playerI
 
 // ListPlayerReviews All reviews of this player, newest first
 // (GET /api/v1/players/{player_id}/reviews)
-func (_ Unimplemented) ListPlayerReviews(w http.ResponseWriter, r *http.Request, playerId PlayerId) {
+func (_ Unimplemented) ListPlayerReviews(w http.ResponseWriter, r *http.Request, playerId PlayerId, params ListPlayerReviewsParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1216,8 +1222,24 @@ func (siw *ServerInterfaceWrapper) ListPlayerReviews(w http.ResponseWriter, r *h
 		return
 	}
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListPlayerReviewsParams
+
+	// ------------- Optional query parameter "as_of_day" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "as_of_day", r.URL.Query(), &params.AsOfDay, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "as_of_day"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "as_of_day", Err: err})
+		}
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListPlayerReviews(w, r, playerId)
+		siw.Handler.ListPlayerReviews(w, r, playerId, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1816,6 +1838,7 @@ func (response GetPlayer501JSONResponse) VisitGetPlayerResponse(w http.ResponseW
 
 type ListPlayerReviewsRequestObject struct {
 	PlayerId PlayerId `json:"player_id"`
+	Params   ListPlayerReviewsParams
 }
 
 type ListPlayerReviewsResponseObject interface {
@@ -1838,6 +1861,20 @@ func (response ListPlayerReviews200JSONResponse) VisitListPlayerReviewsResponse(
 	return err
 }
 
+type ListPlayerReviews400JSONResponse struct{ InvalidJSONResponse }
+
+func (response ListPlayerReviews400JSONResponse) VisitListPlayerReviewsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListPlayerReviews401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response ListPlayerReviews401JSONResponse) VisitListPlayerReviewsResponse(w http.ResponseWriter) error {
@@ -1848,6 +1885,20 @@ func (response ListPlayerReviews401JSONResponse) VisitListPlayerReviewsResponse(
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListPlayerReviews404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListPlayerReviews404JSONResponse) VisitListPlayerReviewsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -2427,10 +2478,11 @@ func (sh *strictHandler) GetPlayer(w http.ResponseWriter, r *http.Request, playe
 }
 
 // ListPlayerReviews operation middleware
-func (sh *strictHandler) ListPlayerReviews(w http.ResponseWriter, r *http.Request, playerId PlayerId) {
+func (sh *strictHandler) ListPlayerReviews(w http.ResponseWriter, r *http.Request, playerId PlayerId, params ListPlayerReviewsParams) {
 	var request ListPlayerReviewsRequestObject
 
 	request.PlayerId = playerId
+	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.ListPlayerReviews(ctx, request.(ListPlayerReviewsRequestObject))

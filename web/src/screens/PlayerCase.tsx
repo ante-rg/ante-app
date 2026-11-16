@@ -3,6 +3,7 @@ import { useRef } from 'react';
 import { Link, useLocation, useParams } from 'react-router';
 import { ApiError, getPlayer, getTimeline, type PlayerCase } from '../api/client';
 import { BandChip } from '../components/BandChip';
+import { ReviewPanel } from '../components/ReviewPanel';
 import { Timeline, TimelineLegend } from '../components/Timeline';
 import { formatEur } from '../format';
 import { useReplayDay } from '../replay/ReplayDay';
@@ -182,6 +183,7 @@ export function PlayerCaseScreen() {
 
       <div className="grid2">
         <Reasons p={p} />
+        <ReviewPanel key={p.player_id} playerId={p.player_id} day={p.as_of_day} effectiveDay={p.effective_day} />
       </div>
     </section>
   );

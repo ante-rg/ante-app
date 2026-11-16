@@ -68,6 +68,18 @@ type Player struct {
 	DepositCount int32
 }
 
+type Review struct {
+	ID           int64
+	PlayerID     string
+	AsOfDay      int32
+	Outcome      string
+	Note         pgtype.Text
+	Reviewer     string
+	Blind        bool
+	ModelVersion string
+	CreatedAt    pgtype.Timestamptz
+}
+
 type ReviewSample struct {
 	ModelVersion string
 	PlayerID     string

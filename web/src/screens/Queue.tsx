@@ -4,6 +4,7 @@ import { useLocation, useNavigate, useSearchParams } from 'react-router';
 import { getQueue, type Queue, type QueueItem } from '../api/client';
 import { BandChip } from '../components/BandChip';
 import { Sparkline } from '../components/Sparkline';
+import { outcomeLabel } from '../format';
 import { useReplayDay } from '../replay/ReplayDay';
 
 const OPERATORS = ['P1', 'P2', 'P3', 'P4', 'P5'];
@@ -98,7 +99,11 @@ function Row({ item, day }: { item: QueueItem; day: number }) {
         )}
       </td>
       <td>
-        <span className="status-pending">To review</span>
+        {item.last_outcome ? (
+          <span className="status-ok">{outcomeLabel(item.last_outcome, true)}</span>
+        ) : (
+          <span className="status-pending">To review</span>
+        )}
       </td>
     </tr>
   );
@@ -111,6 +116,8 @@ export function QueueScreen() {
   const rawOperator = params.get('operator');
   const operator = OPERATORS.find((o) => o === rawOperator);
   const band = params.get('band') === 'high' ? 'high' : 'high,elevated';
+  const rawReview = params.get('review');
+  const reviewStatus = rawReview === 'pending' || rawReview === 'reviewed' ? rawReview : undefined;
   const capacity = parseCapacity(params.get('capacity') ?? '') ?? undefined;
   const [draft, setDraft] = useState<string | null>(null);
 
@@ -126,8 +133,8 @@ export function QueueScreen() {
     );
 
   const { data, isError, isPlaceholderData } = useQuery({
-    queryKey: ['queue', day, operator, band, capacity],
-    queryFn: ({ signal }) => getQueue({ asOfDay: day, operator, band, capacity }, signal),
+    queryKey: ['queue', day, operator, band, capacity, reviewStatus],
+    queryFn: ({ signal }) => getQueue({ asOfDay: day, operator, band, capacity, reviewStatus }, signal),
     placeholderData: (prev, prevQuery) => (prevQuery && (prevQuery.queryKey[1] as number) <= day ? prev : undefined),
   });
   const invalidDraft = draft !== null && parseCapacity(draft) === null;
@@ -172,6 +179,28 @@ export function QueueScreen() {
               </button>
               <button type="button" aria-pressed={band === 'high'} onClick={() => setParam('band', 'high')}>
                 High
+              </button>
+            </fieldset>
+          </div>
+          <div className="field">
+            Review
+            <fieldset className="seg" aria-label="Review status">
+              <button type="button" aria-pressed={!reviewStatus} onClick={() => setParam('review', null)}>
+                All
+              </button>
+              <button
+                type="button"
+                aria-pressed={reviewStatus === 'pending'}
+                onClick={() => setParam('review', 'pending')}
+              >
+                To review
+              </button>
+              <button
+                type="button"
+                aria-pressed={reviewStatus === 'reviewed'}
+                onClick={() => setParam('review', 'reviewed')}
+              >
+                Reviewed
               </button>
             </fieldset>
           </div>
@@ -231,7 +260,9 @@ export function QueueScreen() {
                   {data?.items.length === 0 && (
                     <tr>
                       <td colSpan={10} className="soft">
-                        No players match these filters. Choose "All operators" or another band.
+                        {reviewStatus
+                          ? 'No players match these filters. Choose "All operators" or another review status.'
+                          : 'No players match these filters. Choose "All operators" or another band.'}
                       </td>
                     </tr>
                   )}

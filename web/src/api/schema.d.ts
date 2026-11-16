@@ -646,7 +646,10 @@ export interface operations {
     };
     listPlayerReviews: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Days since each player's own first activity. Defaults to replay.default_day. */
+                as_of_day?: components["parameters"]["AsOfDay"];
+            };
             header?: never;
             path: {
                 player_id: components["parameters"]["PlayerId"];
@@ -666,7 +669,9 @@ export interface operations {
                     };
                 };
             };
+            400: components["responses"]["Invalid"];
             401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
         };
     };
     createReview: {

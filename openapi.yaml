@@ -138,6 +138,7 @@ paths:
       operationId: listPlayerReviews
       parameters:
         - $ref: "#/components/parameters/PlayerId"
+        - $ref: "#/components/parameters/AsOfDay"
       responses:
         "200":
           description: OK
@@ -150,7 +151,9 @@ paths:
                   items:
                     type: array
                     items: { $ref: "#/components/schemas/Review" }
+        "400": { $ref: "#/components/responses/Invalid" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
     post:
       tags: [reviews]
       summary: Save a review
@@ -494,7 +497,7 @@ components:
       required: [as_of_day, outcome, mode]
       additionalProperties: false
       properties:
-        as_of_day: { type: integer, minimum: 0 }
+        as_of_day: { type: integer, minimum: 0, x-go-type: "*int" }
         outcome: { $ref: "#/components/schemas/Outcome" }
         note: { type: string, maxLength: 2000 }
         mode: { type: string, enum: [normal, blind] }
