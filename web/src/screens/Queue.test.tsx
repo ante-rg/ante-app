@@ -232,7 +232,7 @@ describe('QueueScreen', () => {
 
   it('moves with j/k and opens with Enter or click', async () => {
     api();
-    const { router } = renderApp('/?day=7');
+    const { router } = renderApp('/?day=7&band=high');
     const s01 = await screen.findByRole('row', { name: 'Open case S01' });
     s01.focus();
     fireEvent.keyDown(s01, { key: 'j' });
@@ -242,6 +242,7 @@ describe('QueueScreen', () => {
     fireEvent.keyDown(s01, { key: 'Enter' });
     expect(router.state.location.pathname).toBe('/players/S01');
     expect(router.state.location.search).toBe('?day=7');
+    expect(router.state.location.state).toEqual({ queueSearch: '?day=7&band=high' });
   });
 
   it('ignores j/k/Enter with a modifier key', async () => {

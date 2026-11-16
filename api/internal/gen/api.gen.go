@@ -636,11 +636,13 @@ type Timeline struct {
 	FirstRuleFlagDay *int          `json:"first_rule_flag_day,omitempty"`
 	Meta             Meta          `json:"meta"`
 	PlayerId         string        `json:"player_id"`
+
+	// Scores One entry per day 0..effective day, ascending. Score is null where the model gave none.
+	Scores []TimelineScore `json:"scores"`
 }
 
 // TimelineDay defines model for TimelineDay.
 type TimelineDay struct {
-	Band           *Band    `json:"band,omitempty"`
 	ChaseSessionsN *int     `json:"chase_sessions_n,omitempty"`
 	Day            int      `json:"day"`
 	DepositsEur    *float64 `json:"deposits_eur,omitempty"`
@@ -649,8 +651,14 @@ type TimelineDay struct {
 	NetResultEur   *float64 `json:"net_result_eur,omitempty"`
 	NightSessionsN *int     `json:"night_sessions_n,omitempty"`
 	PlayMinutes    *float64 `json:"play_minutes,omitempty"`
-	Score          *float32 `json:"score,omitempty"`
 	SessionsN      *int     `json:"sessions_n,omitempty"`
+}
+
+// TimelineScore defines model for TimelineScore.
+type TimelineScore struct {
+	Band  *Band    `json:"band,omitempty"`
+	Day   int      `json:"day"`
+	Score *float32 `json:"score"`
 }
 
 // AsOfDay defines model for AsOfDay.

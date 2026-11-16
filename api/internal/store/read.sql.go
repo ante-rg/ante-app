@@ -209,16 +209,13 @@ func (q *Queries) ListQueue(ctx context.Context, arg ListQueueParams) ([]ListQue
 
 const listTimelineDays = `-- name: ListTimelineDays :many
 SELECT a.day, a.deposits_n, a.deposits_eur, a.sessions_n, a.play_minutes, a.net_result_eur,
-       a.chase_sessions_n, a.night_sessions_n, a.end_balance_eur, s.score, r.band AS band
+       a.chase_sessions_n, a.night_sessions_n, a.end_balance_eur
 FROM daily_activity a
-LEFT JOIN daily_scores s ON s.model_version = $1 AND s.player_id = a.player_id AND s.day = a.day
-LEFT JOIN daily_ranks r ON r.model_version = $1 AND r.player_id = a.player_id AND r.day = a.day
-WHERE a.player_id = $2 AND a.day <= $3
+WHERE a.player_id = $1 AND a.day <= $2
 ORDER BY a.day
 `
 
 type ListTimelineDaysParams struct {
-	ModelVersion string
 	PlayerID     string
 	EffectiveDay int32
 }
@@ -233,12 +230,10 @@ type ListTimelineDaysRow struct {
 	ChaseSessionsN int32
 	NightSessionsN int32
 	EndBalanceEur  pgtype.Float8
-	Score          pgtype.Float4
-	Band           pgtype.Text
 }
 
 func (q *Queries) ListTimelineDays(ctx context.Context, arg ListTimelineDaysParams) ([]ListTimelineDaysRow, error) {
-	rows, err := q.db.Query(ctx, listTimelineDays, arg.ModelVersion, arg.PlayerID, arg.EffectiveDay)
+	rows, err := q.db.Query(ctx, listTimelineDays, arg.PlayerID, arg.EffectiveDay)
 	if err != nil {
 		return nil, err
 	}
@@ -256,9 +251,46 @@ func (q *Queries) ListTimelineDays(ctx context.Context, arg ListTimelineDaysPara
 			&i.ChaseSessionsN,
 			&i.NightSessionsN,
 			&i.EndBalanceEur,
-			&i.Score,
-			&i.Band,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTimelineScores = `-- name: ListTimelineScores :many
+SELECT g.day::int AS day, r.score, r.band
+FROM generate_series(0, $1::int) AS g(day)
+LEFT JOIN daily_ranks r ON r.model_version = $2 AND r.player_id = $3 AND r.day = g.day
+ORDER BY g.day
+`
+
+type ListTimelineScoresParams struct {
+	EffectiveDay int32
+	ModelVersion string
+	PlayerID     string
+}
+
+type ListTimelineScoresRow struct {
+	Day   int32
+	Score pgtype.Float4
+	Band  pgtype.Text
+}
+
+func (q *Queries) ListTimelineScores(ctx context.Context, arg ListTimelineScoresParams) ([]ListTimelineScoresRow, error) {
+	rows, err := q.db.Query(ctx, listTimelineScores, arg.EffectiveDay, arg.ModelVersion, arg.PlayerID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListTimelineScoresRow
+	for rows.Next() {
+		var i ListTimelineScoresRow
+		if err := rows.Scan(&i.Day, &i.Score, &i.Band); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

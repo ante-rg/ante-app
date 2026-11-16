@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ApiError, getQueue } from './client';
+import { ApiError, getPlayer, getQueue, getTimeline } from './client';
 
 describe('getQueue', () => {
   it('sends only the params given', async () => {
@@ -30,5 +30,29 @@ describe('getQueue', () => {
     const err = await getQueue({ asOfDay: 1 }).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(ApiError);
     expect(err).toMatchObject({ status: 500, name: 'ApiError' });
+  });
+});
+
+describe('getPlayer / getTimeline', () => {
+  it('encodes the player id and sends as_of_day', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    await getPlayer('a/b c', 7);
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/v1/players/a%2Fb%20c?as_of_day=7');
+  });
+
+  it('fetches the timeline', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    await getTimeline('S01', 7);
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/v1/players/S01/timeline?as_of_day=7');
+  });
+
+  it('rejects with ApiError on 404', async () => {
+    const body = JSON.stringify({ code: 'not_found', message: 'nope' });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(body, { status: 404 })));
+    const err = await getPlayer('x', 1).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err).toMatchObject({ status: 404, code: 'not_found' });
   });
 });

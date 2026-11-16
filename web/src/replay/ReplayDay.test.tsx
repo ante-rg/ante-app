@@ -1,4 +1,4 @@
-import { fireEvent, screen, within } from '@testing-library/react';
+import { act, fireEvent, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { mockApi, renderApp, replayBody } from '../test/render';
 
@@ -30,6 +30,16 @@ describe('ReplayDayProvider', () => {
     const { router } = renderApp('/?day=7&band=high');
     fireEvent.change(await screen.findByLabelText('Data as of day'), { target: { value: '9' } });
     expect(router.state.location.search).toBe('?day=9&band=high');
+  });
+
+  it('setDay keeps the router state', async () => {
+    mockApi(ok);
+    const { router } = renderApp('/');
+    await screen.findByRole('status');
+    await act(() => router.navigate('/players/S01?day=7', { state: { queueSearch: '?band=high' } }));
+    fireEvent.change(await screen.findByLabelText('Data as of day'), { target: { value: '9' } });
+    expect(router.state.location.search).toBe('?day=9');
+    expect(router.state.location.state).toEqual({ queueSearch: '?band=high' });
   });
 
   it.each(['no_ranks', 'no_active_model'])('says no model is loaded on 404 %s', async (code) => {

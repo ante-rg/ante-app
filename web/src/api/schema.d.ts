@@ -305,7 +305,10 @@ export interface components {
             night_sessions_n?: number;
             /** Format: double */
             end_balance_eur?: number | null;
-            score?: number | null;
+        };
+        TimelineScore: {
+            day: number;
+            score: number | null;
             band?: components["schemas"]["Band"];
         };
         Timeline: {
@@ -315,6 +318,8 @@ export interface components {
             first_rule_flag_day?: number | null;
             /** @description Only days with activity; the client fills gaps with zero. */
             days: components["schemas"]["TimelineDay"][];
+            /** @description One entry per day 0..effective day, ascending. Score is null where the model gave none. */
+            scores: components["schemas"]["TimelineScore"][];
             meta: components["schemas"]["Meta"];
         };
         Session: {
