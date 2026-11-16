@@ -141,21 +141,30 @@ SELECT r.player_id, p.operator_code, p.last_day, r.rank, r.score, r.band,
        to_jsonb(ARRAY(SELECT s.score FROM generate_series(least(r.day, p.last_day) - 29, least(r.day, p.last_day)) AS d
                       LEFT JOIN daily_scores s ON s.model_version = r.model_version
                                               AND s.player_id = r.player_id AND s.day = d
-                      ORDER BY d))::jsonb AS trend
+                      ORDER BY d))::jsonb AS trend,
+       lr.outcome AS last_outcome
 FROM daily_ranks r
 JOIN players p ON p.player_id = r.player_id
-WHERE r.model_version = $1 AND r.day = $2
+LEFT JOIN reviews lr ON lr.id = (
+  SELECT v.id FROM reviews v
+  WHERE v.player_id = r.player_id AND v.as_of_day <= $1
+  ORDER BY v.id DESC LIMIT 1)
+WHERE r.model_version = $2 AND r.day = $1
   AND r.band = ANY($3::text[])
   AND ($4::text IS NULL OR p.operator_code = $4::text)
+  AND ($5::text IS NULL
+       OR ($5::text = 'pending' AND lr.id IS NULL)
+       OR ($5::text = 'reviewed' AND lr.id IS NOT NULL))
 ORDER BY r.rank NULLS LAST, r.player_id
-LIMIT $5
+LIMIT $6
 `
 
 type ListQueueParams struct {
-	ModelVersion string
 	Day          int32
+	ModelVersion string
 	Bands        []string
 	Operator     pgtype.Text
+	ReviewStatus pgtype.Text
 	RowLimit     int32
 }
 
@@ -169,14 +178,16 @@ type ListQueueRow struct {
 	Reasons      []byte
 	Flagged      bool
 	Trend        []byte
+	LastOutcome  pgtype.Text
 }
 
 func (q *Queries) ListQueue(ctx context.Context, arg ListQueueParams) ([]ListQueueRow, error) {
 	rows, err := q.db.Query(ctx, listQueue,
-		arg.ModelVersion,
 		arg.Day,
+		arg.ModelVersion,
 		arg.Bands,
 		arg.Operator,
+		arg.ReviewStatus,
 		arg.RowLimit,
 	)
 	if err != nil {
@@ -196,6 +207,7 @@ func (q *Queries) ListQueue(ctx context.Context, arg ListQueueParams) ([]ListQue
 			&i.Reasons,
 			&i.Flagged,
 			&i.Trend,
+			&i.LastOutcome,
 		); err != nil {
 			return nil, err
 		}
@@ -309,14 +321,16 @@ SELECT (count(*) FILTER (WHERE r.band = 'high'))::int AS high,
        (count(*) FILTER (WHERE r.band = 'high' AND r.day > 0 AND NOT EXISTS (
             SELECT 1 FROM daily_ranks q
              WHERE q.model_version = r.model_version AND q.day = r.day - 1
-               AND q.player_id = r.player_id AND q.band = 'high')))::int AS new_high
+               AND q.player_id = r.player_id AND q.band = 'high')))::int AS new_high,
+       (count(*) FILTER (WHERE r.band IN ('high', 'elevated') AND NOT EXISTS (
+            SELECT 1 FROM reviews v WHERE v.player_id = r.player_id AND v.as_of_day <= $1)))::int AS pending_review
 FROM daily_ranks r
-WHERE r.model_version = $1 AND r.day = $2
+WHERE r.model_version = $2 AND r.day = $1
 `
 
 type QueueCountsParams struct {
-	ModelVersion string
 	Day          int32
+	ModelVersion string
 }
 
 type QueueCountsRow struct {
@@ -325,10 +339,11 @@ type QueueCountsRow struct {
 	Low              int32
 	InsufficientData int32
 	NewHigh          int32
+	PendingReview    int32
 }
 
 func (q *Queries) QueueCounts(ctx context.Context, arg QueueCountsParams) (QueueCountsRow, error) {
-	row := q.db.QueryRow(ctx, queueCounts, arg.ModelVersion, arg.Day)
+	row := q.db.QueryRow(ctx, queueCounts, arg.Day, arg.ModelVersion)
 	var i QueueCountsRow
 	err := row.Scan(
 		&i.High,
@@ -336,6 +351,7 @@ func (q *Queries) QueueCounts(ctx context.Context, arg QueueCountsParams) (Queue
 		&i.Low,
 		&i.InsufficientData,
 		&i.NewHigh,
+		&i.PendingReview,
 	)
 	return i, err
 }

@@ -155,6 +155,51 @@ describe('QueueScreen', () => {
     expect(screen.getByLabelText('Show top')).toHaveValue(3);
   });
 
+  it('shows the last outcome in the Review cell', async () => {
+    const items = [
+      { ...queueBody.items[0], review_status: 'reviewed', last_outcome: 'not_enough_data' },
+      { ...queueBody.items[1], last_outcome: null },
+    ];
+    api({ status: 200, body: { ...queueBody, items } });
+    renderApp('/?day=7');
+    expect(await screen.findByRole('row', { name: 'Open case S01' })).toHaveTextContent('Not enough data');
+    expect(rowOf('Open case S02')).toHaveTextContent('To review');
+  });
+
+  it('filters by review status and keeps the other params', async () => {
+    const mock = api();
+    const { router } = renderApp('/?day=7');
+    await screen.findByRole('row', { name: 'Open case S01' });
+    const pressed = (n: string) => screen.getByRole('button', { name: n }).getAttribute('aria-pressed');
+    expect(screen.getByRole('group', { name: 'Review status' })).toBeInTheDocument();
+    expect(pressed('All')).toBe('true');
+    fireEvent.click(screen.getByRole('button', { name: 'To review' }));
+    expect(router.state.location.search).toBe('?day=7&review=pending');
+    await waitFor(() => expect(queueUrls(mock).some((u) => u.includes('review_status=pending'))).toBe(true));
+    fireEvent.click(screen.getByRole('button', { name: 'Reviewed' }));
+    expect(router.state.location.search).toBe('?day=7&review=reviewed');
+    await waitFor(() => expect(queueUrls(mock).some((u) => u.includes('review_status=reviewed'))).toBe(true));
+    fireEvent.click(screen.getByRole('button', { name: 'All' }));
+    expect(router.state.location.search).toBe('?day=7');
+    expect(queueUrls(mock).at(-1)).not.toContain('review_status');
+  });
+
+  it('reads review status from the URL', async () => {
+    const mock = api();
+    renderApp('/?day=7&review=reviewed');
+    await screen.findByRole('row', { name: 'Open case S01' });
+    expect(queueUrls(mock)[0]).toContain('review_status=reviewed');
+    expect(screen.getByRole('button', { name: 'Reviewed' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('treats an unknown review param as All', async () => {
+    const mock = api();
+    renderApp('/?day=7&review=x');
+    await screen.findByRole('row', { name: 'Open case S01' });
+    expect(queueUrls(mock)[0]).not.toContain('review_status');
+    expect(screen.getByRole('button', { name: 'All' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
   it('keeps the rows when a background refetch fails', async () => {
     let queueCalls = 0;
     vi.stubGlobal(
@@ -227,6 +272,14 @@ describe('QueueScreen', () => {
     renderApp('/?day=7');
     expect(
       await screen.findByText('No players match these filters. Choose "All operators" or another band.'),
+    ).toBeInTheDocument();
+  });
+
+  it('shows the review-status empty copy when a review filter is set', async () => {
+    api({ status: 200, body: { ...queueBody, items: [] } });
+    renderApp('/?day=7&review=reviewed');
+    expect(
+      await screen.findByText('No players match these filters. Choose "All operators" or another review status.'),
     ).toBeInTheDocument();
   });
 
