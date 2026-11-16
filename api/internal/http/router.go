@@ -9,11 +9,11 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 )
 
-func NewRouter(api http.Handler, webDir string) http.Handler {
+func NewRouter(api http.Handler, webDir string, a Auth, aw AuditWriter) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID, middleware.Recoverer, requestLogger)
-	r.Handle("/api/*", api)
-	r.Handle("/ingest/*", api)
+	r.With(audit(aw), requireUser(a)).Handle("/api/*", api)
+	r.With(audit(aw)).Handle("/ingest/*", api)
 	r.Handle("/healthz", api)
 	r.NotFound(spa(webDir))
 	return r

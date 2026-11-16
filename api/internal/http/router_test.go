@@ -17,6 +17,11 @@ func testRouter(t *testing.T) http.Handler {
 
 func routerWith(t *testing.T, api http.Handler) http.Handler {
 	t.Helper()
+	return routerWithAuth(t, api, Auth{DevUser: "dev@localhost"}, &fakeAudit{})
+}
+
+func routerWithAuth(t *testing.T, api http.Handler, a Auth, aw AuditWriter) http.Handler {
+	t.Helper()
 	dir := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(dir, "assets"), 0o755); err != nil {
 		t.Fatal(err)
@@ -27,7 +32,7 @@ func routerWith(t *testing.T, api http.Handler) http.Handler {
 	if err := os.WriteFile(filepath.Join(dir, "assets", "app.js"), []byte("console.log(1)"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	return NewRouter(api, dir)
+	return NewRouter(api, dir, a, aw)
 }
 
 func do(h http.Handler, method, path string) *httptest.ResponseRecorder {
