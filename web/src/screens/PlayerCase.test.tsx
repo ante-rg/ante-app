@@ -1,4 +1,4 @@
-import { act, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mockApi, renderApp, replayBody } from '../test/render';
 
@@ -41,10 +41,12 @@ const api = (player: Record<string, unknown> = {}, extra: Record<string, { statu
     '/api/v1/replay': { status: 200, body: replayBody },
     '/api/v1/players/S01': { status: 200, body: { ...playerBody, ...player } },
     '/api/v1/players/S01/timeline': { status: 200, body: timelineBody },
+    '/api/v1/players/S01/reviews': { status: 200, body: { items: [] } },
     ...extra,
   });
 
-const urls = (mock: ReturnType<typeof api>) => mock.mock.calls.map((c) => String(c[0]));
+const urls = (mock: ReturnType<typeof api>) =>
+  mock.mock.calls.map((c) => String(c[0])).filter((u) => !u.includes('/reviews'));
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -68,6 +70,12 @@ describe('PlayerCaseScreen', () => {
     expect(document.querySelector('.wbar span')).toHaveStyle({ width: '46%' });
     expect(document.querySelector('.grid2 > .panel .reasons')).toBeInTheDocument();
     expect(screen.getByText('Deposits over 2,000 € in 30 days, first fired on day 9')).toBeInTheDocument();
+  });
+
+  it('renders the review panel', async () => {
+    api();
+    renderApp('/players/S01?day=12');
+    expect(await screen.findByRole('heading', { name: 'Your review' })).toBeInTheDocument();
   });
 
   it('never shows the last day while the effective day is the requested one', async () => {
@@ -183,6 +191,42 @@ describe('PlayerCaseScreen', () => {
     expect(screen.getByRole('heading', { name: 'Player S01' })).toBeInTheDocument();
     expect(screen.getByText(/Operator P3\. Day 12\./)).toBeInTheDocument();
     expect(screen.queryByText("Can't load this case.")).not.toBeInTheDocument();
+  });
+
+  it('saves a review with the day of the case shown, not the requested day', async () => {
+    const mock = api();
+    const { router } = renderApp('/players/S01?day=12');
+    await screen.findByText(/Operator P3\. Day 12\./);
+    mock.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const u = new URL(String(input), 'http://localhost');
+      if (u.pathname === '/api/v1/replay') return new Response(JSON.stringify(replayBody), { status: 200 });
+      if (u.pathname.endsWith('/timeline')) return new Response(JSON.stringify(timelineBody), { status: 200 });
+      if (u.pathname.endsWith('/reviews')) {
+        return init?.method === 'POST'
+          ? new Response(
+              JSON.stringify({
+                id: 1,
+                player_id: 'S01',
+                reviewer: 'a@b.co',
+                blind: false,
+                model_version: 'v',
+                created_at: '2026-01-01T00:00:00Z',
+                ...JSON.parse(String(init.body)),
+              }),
+              { status: 201 },
+            )
+          : new Response(JSON.stringify({ items: [] }), { status: 200 });
+      }
+      return new Response('{}', { status: 500 });
+    });
+    await act(() => router.navigate('/players/S01?day=15'));
+    await screen.findByText("Can't refresh this case. Showing the last loaded day.");
+    fireEvent.click(screen.getByLabelText(/No concern/));
+    fireEvent.click(screen.getByRole('button', { name: 'Save review' }));
+    const calls = () => mock.mock.calls as unknown as [RequestInfo | URL, RequestInit?][];
+    await waitFor(() => expect(calls().some((c) => c[1]?.method === 'POST')).toBe(true));
+    const post = calls().find((c) => c[1]?.method === 'POST');
+    expect(JSON.parse(String(post?.[1]?.body)).as_of_day).toBe(12);
   });
 
   it('puts the timeline legend in the panel header', async () => {

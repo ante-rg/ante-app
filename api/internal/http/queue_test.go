@@ -279,3 +279,65 @@ func TestQueue_EffectiveDay(t *testing.T) {
 		t.Fatalf("item = %v", it)
 	}
 }
+
+func TestQueue_Reviews(t *testing.T) {
+	s := serve(t, queueFixture())
+	save := func(player string, day int, outcome string) {
+		t.Helper()
+		if rec, b := post(t, s, player, reviewBody(day, outcome, "", "normal")); rec.Code != 201 {
+			t.Fatalf("save %s: %d %v", player, rec.Code, b)
+		}
+	}
+	all := "&band=high,elevated,low&capacity=20"
+	before := queue(t, s, "as_of_day=3")["counts"].(map[string]any)["pending_review"]
+	save("S02", 4, "no_concern")
+	save("S02", 4, "intervention_needed")
+	save("S05", 5, "not_enough_data")
+
+	t.Run("status and last outcome respect the day", func(t *testing.T) {
+		byID := map[string]map[string]any{}
+		for _, it := range itemsOf(t, queue(t, s, "as_of_day=4"+all)) {
+			byID[it["player_id"].(string)] = it
+		}
+		if it := byID["S02"]; it["review_status"] != "reviewed" || it["last_outcome"] != "intervention_needed" {
+			t.Fatalf("S02 = %v", it)
+		}
+		if it := byID["S05"]; it["review_status"] != "pending" || it["last_outcome"] != nil {
+			t.Fatalf("S05 = %v", it)
+		}
+	})
+	t.Run("reviewed filter keeps rank order and ranks", func(t *testing.T) {
+		items := itemsOf(t, queue(t, s, "as_of_day=5&review_status=reviewed"+all))
+		if got := ids(items); got != "S02,S05" {
+			t.Fatalf("ids = %s", got)
+		}
+		if items[0]["rank"] != 2.0 || items[1]["rank"] != 5.0 {
+			t.Fatalf("ranks = %v %v", items[0]["rank"], items[1]["rank"])
+		}
+	})
+	t.Run("pending filter drops reviewed players", func(t *testing.T) {
+		items := itemsOf(t, queue(t, s, "as_of_day=5&review_status=pending&band=high,elevated,low"))
+		if len(items) != 10 || items[0]["player_id"] != "S01" || strings.Contains(","+ids(items)+",", ",S02,") ||
+			strings.Contains(","+ids(items)+",", ",S05,") {
+			t.Fatalf("ids = %s", ids(items))
+		}
+		if items[1]["player_id"] != "S03" {
+			t.Fatalf("second = %v", items[1])
+		}
+	})
+	t.Run("pending count", func(t *testing.T) {
+		if got := queue(t, s, "as_of_day=5")["counts"].(map[string]any)["pending_review"]; got != 3.0 {
+			t.Fatalf("day 5 pending = %v", got)
+		}
+		if got := queue(t, s, "as_of_day=3")["counts"].(map[string]any)["pending_review"]; got != before {
+			t.Fatalf("day 3 pending = %v, before = %v", got, before)
+		}
+	})
+	t.Run("all equals no parameter", func(t *testing.T) {
+		a := itemsOf(t, queue(t, s, "as_of_day=4&review_status=all"))
+		b := itemsOf(t, queue(t, s, "as_of_day=4"))
+		if ids(a) != ids(b) || len(a) != 4 {
+			t.Fatalf("all = %s, none = %s", ids(a), ids(b))
+		}
+	})
+}

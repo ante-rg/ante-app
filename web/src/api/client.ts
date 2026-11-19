@@ -8,6 +8,9 @@ export type PlayerCase = components['schemas']['PlayerCase'];
 export type Timeline = components['schemas']['Timeline'];
 export type TimelineDay = components['schemas']['TimelineDay'];
 export type TimelineScore = components['schemas']['TimelineScore'];
+export type Review = components['schemas']['Review'];
+export type ReviewCreate = components['schemas']['ReviewCreate'];
+export type Outcome = components['schemas']['Outcome'];
 export type Band = components['schemas']['Band'];
 
 export class ApiError extends Error {
@@ -26,6 +29,7 @@ export type QueueParams = {
   operator?: string;
   band?: 'high,elevated' | 'high';
   capacity?: number;
+  reviewStatus?: 'pending' | 'reviewed';
 };
 
 export async function getHealth(): Promise<Health> {
@@ -34,8 +38,8 @@ export async function getHealth(): Promise<Health> {
   return (await res.json()) as Health;
 }
 
-async function getJSON<T>(url: string, signal?: AbortSignal): Promise<T> {
-  const res = await fetch(url, { signal });
+async function getJSON<T>(url: string, signal?: AbortSignal, init?: RequestInit): Promise<T> {
+  const res = await fetch(url, { ...init, signal });
   if (!res.ok) {
     const body = ((await res.json().catch(() => null)) ?? {}) as Partial<components['schemas']['Error']>;
     throw new ApiError(res.status, body.code, body.message);
@@ -52,6 +56,7 @@ export function getQueue(p: QueueParams, signal?: AbortSignal): Promise<Queue> {
   if (p.operator) q.set('operator', p.operator);
   if (p.band) q.set('band', p.band);
   if (p.capacity !== undefined) q.set('capacity', String(p.capacity));
+  if (p.reviewStatus) q.set('review_status', p.reviewStatus);
   return getJSON<Queue>(`/api/v1/queue?${q}`, signal);
 }
 
@@ -61,4 +66,16 @@ export function getPlayer(id: string, asOfDay: number, signal?: AbortSignal): Pr
 
 export function getTimeline(id: string, asOfDay: number, signal?: AbortSignal): Promise<Timeline> {
   return getJSON<Timeline>(`/api/v1/players/${encodeURIComponent(id)}/timeline?as_of_day=${asOfDay}`, signal);
+}
+
+export function getReviews(id: string, asOfDay: number, signal?: AbortSignal): Promise<{ items: Review[] }> {
+  return getJSON(`/api/v1/players/${encodeURIComponent(id)}/reviews?as_of_day=${asOfDay}`, signal);
+}
+
+export function createReview(id: string, body: ReviewCreate): Promise<Review> {
+  return getJSON<Review>(`/api/v1/players/${encodeURIComponent(id)}/reviews`, undefined, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
 }
