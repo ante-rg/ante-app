@@ -9,6 +9,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/ante-rg/ante-app/api/internal/auth"
 	"github.com/ante-rg/ante-app/api/internal/gen"
 	"github.com/ante-rg/ante-app/api/internal/store"
 )
@@ -52,6 +53,16 @@ func (s *Server) GetQueue(ctx context.Context, req gen.GetQueueRequestObject) (g
 	if err != nil {
 		return queueBadRequest(err.Error()), nil
 	}
+	var op, status pgtype.Text
+	if p.Operator != nil {
+		op = pgtype.Text{String: *p.Operator, Valid: true}
+	}
+	if p.ReviewStatus != nil && *p.ReviewStatus != gen.GetQueueParamsReviewStatusAll {
+		status = pgtype.Text{String: string(*p.ReviewStatus), Valid: true}
+	}
+	if p.Mode != nil && *p.Mode == gen.GetQueueParamsModeBlind {
+		return s.blindQueue(ctx, m, day, op, status)
+	}
 	bands, err := parseBands(p.Band)
 	if err != nil {
 		return queueBadRequest(err.Error()), nil
@@ -63,22 +74,11 @@ func (s *Server) GetQueue(ctx context.Context, req gen.GetQueueRequestObject) (g
 		}
 		capacity = int32(*p.Capacity)
 	}
-	if p.Mode != nil && *p.Mode == gen.GetQueueParamsModeBlind {
-		return gen.GetQueue501JSONResponse{NotImplementedJSONResponse: gen.NotImplementedJSONResponse(
-			gen.Error{Code: "not_implemented", Message: "Blind mode is not implemented yet"})}, nil
-	}
 
 	q := store.New(s.DB)
 	c, err := q.QueueCounts(ctx, store.QueueCountsParams{ModelVersion: m.Version, Day: day})
 	if err != nil {
 		return nil, err
-	}
-	var op, status pgtype.Text
-	if p.Operator != nil {
-		op = pgtype.Text{String: *p.Operator, Valid: true}
-	}
-	if p.ReviewStatus != nil && *p.ReviewStatus != gen.GetQueueParamsReviewStatusAll {
-		status = pgtype.Text{String: string(*p.ReviewStatus), Valid: true}
 	}
 	rows, err := q.ListQueue(ctx, store.ListQueueParams{
 		ModelVersion: m.Version, Day: day, Bands: bands, Operator: op, ReviewStatus: status, RowLimit: capacity,
@@ -102,27 +102,50 @@ func (s *Server) GetQueue(ctx context.Context, req gen.GetQueueRequestObject) (g
 	return gen.GetQueue200JSONResponse(out), nil
 }
 
-func queueItem(r store.ListQueueRow, day int32) (gen.QueueItem, error) {
-	eff := min(day, r.LastDay)
-	band := gen.Band(r.Band)
-	it := gen.QueueItem{
-		PlayerId:       r.PlayerID,
-		OperatorCode:   r.OperatorCode,
-		EffectiveDay:   int(eff),
-		DaysObserved:   int(eff) + 1,
-		Band:           &band,
-		ReviewStatus:   gen.QueueItemReviewStatusPending,
-		FlaggedByRules: &r.Flagged,
+func (s *Server) blindQueue(ctx context.Context, m activeModel, day int32, op, status pgtype.Text) (gen.GetQueueResponseObject, error) {
+	email, ok := auth.Email(ctx)
+	if !ok {
+		return nil, errors.New("no authenticated user")
 	}
-	if day > r.LastDay {
-		last := int(r.LastDay)
+	rows, err := store.New(s.DB).ListBlindQueue(ctx, store.ListBlindQueueParams{
+		ModelVersion: m.Version, Day: day, Reviewer: email, Operator: op, ReviewStatus: status,
+	})
+	if err != nil {
+		return nil, err
+	}
+	items := make([]gen.QueueItem, 0, len(rows))
+	for _, r := range rows {
+		it := baseItem(r.PlayerID, r.OperatorCode, r.LastDay, day, r.LastOutcome)
+		items = append(items, it)
+	}
+	return gen.GetQueue200JSONResponse(gen.Queue{
+		AsOfDay: int(day), Items: items, Meta: m.meta(m.Card.DefaultCapacity), Mode: gen.QueueMode(gen.GetQueueParamsModeBlind),
+	}), nil
+}
+
+func baseItem(playerID, operatorCode string, lastDay, day int32, outcome pgtype.Text) gen.QueueItem {
+	eff := min(day, lastDay)
+	it := gen.QueueItem{
+		PlayerId: playerID, OperatorCode: operatorCode, EffectiveDay: int(eff), DaysObserved: int(eff) + 1,
+		ReviewStatus: gen.QueueItemReviewStatusPending,
+	}
+	if day > lastDay {
+		last := int(lastDay)
 		it.HistoryEndedOnDay = &last
 	}
-	if r.LastOutcome.Valid {
-		o := gen.Outcome(r.LastOutcome.String)
+	if outcome.Valid {
+		o := gen.Outcome(outcome.String)
 		it.LastOutcome = &o
 		it.ReviewStatus = gen.QueueItemReviewStatusReviewed
 	}
+	return it
+}
+
+func queueItem(r store.ListQueueRow, day int32) (gen.QueueItem, error) {
+	band := gen.Band(r.Band)
+	it := baseItem(r.PlayerID, r.OperatorCode, r.LastDay, day, r.LastOutcome)
+	it.Band = &band
+	it.FlaggedByRules = &r.Flagged
 	if r.Rank.Valid {
 		rank := int(r.Rank.Int32)
 		it.Rank = &rank

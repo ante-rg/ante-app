@@ -1,4 +1,4 @@
-import { Link, Outlet, type RouteObject, useLocation } from 'react-router';
+import { Link, Outlet, type RouteObject, useLocation, useSearchParams } from 'react-router';
 import { ReplayControl } from './replay/ReplayControl';
 import { ReplayDayProvider, ReplayGate, useOptionalReplayDay } from './replay/ReplayDay';
 import { Health } from './screens/Health';
@@ -15,6 +15,7 @@ const NAV = [
 function Header() {
   const replay = useOptionalReplayDay();
   const { pathname } = useLocation();
+  const blind = useSearchParams()[0].get('mode') === 'blind';
   return (
     <header className="bar">
       <div className="wrap">
@@ -31,7 +32,7 @@ function Header() {
           {NAV.map((n) => (
             <Link
               key={n.to}
-              to={replay ? `${n.to}?day=${replay.day}` : n.to}
+              to={replay ? `${n.to}?day=${replay.day}${blind ? '&mode=blind' : ''}` : n.to}
               aria-current={n.isCurrent(pathname) ? 'page' : undefined}
             >
               {n.label}

@@ -92,6 +92,68 @@ func (q *Queries) GetPlayerCase(ctx context.Context, arg GetPlayerCaseParams) (G
 	return i, err
 }
 
+const listBlindQueue = `-- name: ListBlindQueue :many
+SELECT s.player_id, p.operator_code, p.last_day, lr.outcome AS last_outcome
+FROM review_sample s
+JOIN players p ON p.player_id = s.player_id
+LEFT JOIN reviews lr ON lr.id = (
+  SELECT v.id FROM reviews v
+  WHERE v.player_id = s.player_id AND v.blind AND v.reviewer = $1 AND v.as_of_day <= $2
+  ORDER BY v.id DESC LIMIT 1)
+WHERE s.model_version = $3
+  AND ($4::text IS NULL OR p.operator_code = $4::text)
+  AND ($5::text IS NULL
+       OR ($5::text = 'pending' AND lr.id IS NULL)
+       OR ($5::text = 'reviewed' AND lr.id IS NOT NULL))
+ORDER BY s.position
+`
+
+type ListBlindQueueParams struct {
+	Reviewer     string
+	Day          int32
+	ModelVersion string
+	Operator     pgtype.Text
+	ReviewStatus pgtype.Text
+}
+
+type ListBlindQueueRow struct {
+	PlayerID     string
+	OperatorCode string
+	LastDay      int32
+	LastOutcome  pgtype.Text
+}
+
+func (q *Queries) ListBlindQueue(ctx context.Context, arg ListBlindQueueParams) ([]ListBlindQueueRow, error) {
+	rows, err := q.db.Query(ctx, listBlindQueue,
+		arg.Reviewer,
+		arg.Day,
+		arg.ModelVersion,
+		arg.Operator,
+		arg.ReviewStatus,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListBlindQueueRow
+	for rows.Next() {
+		var i ListBlindQueueRow
+		if err := rows.Scan(
+			&i.PlayerID,
+			&i.OperatorCode,
+			&i.LastDay,
+			&i.LastOutcome,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listPlayerRuleFlags = `-- name: ListPlayerRuleFlags :many
 SELECT f.rule_id, min(f.rule_text)::text AS rule_text, min(f.day)::int AS first_day
 FROM rule_flags f

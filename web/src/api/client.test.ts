@@ -18,6 +18,15 @@ describe('getQueue', () => {
     expect(fetchMock.mock.calls[1][0]).not.toContain('review_status');
   });
 
+  it('sends mode=blind only when asked', async () => {
+    const fetchMock = vi.fn(async (_url: string) => new Response('{}', { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    await getQueue({ asOfDay: 3, mode: 'blind' });
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/v1/queue?as_of_day=3&mode=blind');
+    await getQueue({ asOfDay: 3 });
+    expect(fetchMock.mock.calls[1][0]).not.toContain('mode');
+  });
+
   it('passes the abort signal to fetch', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
@@ -63,6 +72,22 @@ describe('getPlayer / getTimeline', () => {
     const err = await getPlayer('x', 1).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(ApiError);
     expect(err).toMatchObject({ status: 404, code: 'not_found' });
+  });
+});
+
+describe('blind mode', () => {
+  it('adds mode=blind to the three getters only when blind', async () => {
+    const fetchMock = vi.fn(async (_u: string) => new Response('{"items":[]}', { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    await getPlayer('S01', 7, undefined, 'blind');
+    await getTimeline('S01', 7, undefined, 'blind');
+    await getReviews('S01', 7, undefined, 'blind');
+    for (const c of fetchMock.mock.calls) expect(new URL(c[0], 'http://x').searchParams.get('mode')).toBe('blind');
+    fetchMock.mockClear();
+    await getPlayer('S01', 7);
+    await getTimeline('S01', 7);
+    await getReviews('S01', 7);
+    for (const c of fetchMock.mock.calls) expect(c[0]).not.toContain('mode');
   });
 });
 

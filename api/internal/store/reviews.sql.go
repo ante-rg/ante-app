@@ -53,16 +53,19 @@ func (q *Queries) InsertReview(ctx context.Context, arg InsertReviewParams) (Rev
 }
 
 const listPlayerReviews = `-- name: ListPlayerReviews :many
-SELECT id, player_id, as_of_day, outcome, note, reviewer, blind, model_version, created_at FROM reviews WHERE player_id = $1 AND as_of_day <= $2 ORDER BY id DESC
+SELECT id, player_id, as_of_day, outcome, note, reviewer, blind, model_version, created_at FROM reviews WHERE player_id = $1 AND as_of_day <= $2
+  AND ($3::text IS NULL OR (blind AND reviewer = $3::text))
+ORDER BY id DESC
 `
 
 type ListPlayerReviewsParams struct {
-	PlayerID string
-	Day      int32
+	PlayerID      string
+	Day           int32
+	BlindReviewer pgtype.Text
 }
 
 func (q *Queries) ListPlayerReviews(ctx context.Context, arg ListPlayerReviewsParams) ([]Review, error) {
-	rows, err := q.db.Query(ctx, listPlayerReviews, arg.PlayerID, arg.Day)
+	rows, err := q.db.Query(ctx, listPlayerReviews, arg.PlayerID, arg.Day, arg.BlindReviewer)
 	if err != nil {
 		return nil, err
 	}

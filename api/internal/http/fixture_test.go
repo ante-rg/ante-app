@@ -44,10 +44,16 @@ type fxFlag struct {
 	RuleID, Text string
 }
 
+type fxSample struct {
+	PlayerID, Source string
+	Position         int32
+}
+
 type fixture struct {
 	Version   string
 	Card      string
 	Players   []fxPlayer
+	Sample    []fxSample
 	SkipRanks bool
 }
 
@@ -131,5 +137,9 @@ func seed(t *testing.T, ctx context.Context, pool *pgxpool.Pool, f *fixture) {
 			exec(`INSERT INTO rule_flags (player_id, day, rule_id, rule_text) VALUES ($1, $2, $3, $4)`,
 				p.ID, f.Day, f.RuleID, f.Text)
 		}
+	}
+	for _, r := range f.Sample {
+		exec(`INSERT INTO review_sample (model_version, player_id, source, position) VALUES ($1, $2, $3, $4)`,
+			v, r.PlayerID, r.Source, r.Position)
 	}
 }
