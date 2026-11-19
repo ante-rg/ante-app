@@ -351,6 +351,54 @@ input[type="number"] {
   font-variant-numeric: tabular-nums;
 }
 
+.switch {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  cursor: pointer;
+  font-size: var(--text-sm);
+  margin-left: auto;
+}
+
+.switch button {
+  width: 36px;
+  height: 20px;
+  border-radius: 999px;
+  border: 1px solid var(--rule);
+  background: var(--sunken);
+  position: relative;
+  cursor: pointer;
+  padding: 0;
+}
+
+.switch button::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--ink-soft);
+  transition: transform 0.15s;
+}
+
+.switch button[aria-checked="true"] {
+  background: var(--action);
+  border-color: var(--action);
+}
+
+.switch button[aria-checked="true"]::after {
+  transform: translateX(16px);
+  background: var(--on-action);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .switch button::after {
+    transition: none;
+  }
+}
+
 .seg {
   margin: 0;
   padding: 0;
@@ -376,6 +424,14 @@ input[type="number"] {
 .seg button[aria-pressed="true"] {
   background: var(--ink);
   color: var(--surface);
+}
+
+.blindnote {
+  margin: 0;
+  padding: var(--s3) var(--s4);
+  background: var(--sunken);
+  font-size: var(--text-sm);
+  border-bottom: 1px solid var(--rule);
 }
 
 .tablewrap {
@@ -452,6 +508,10 @@ tbody tr.go:focus-visible {
 @media (max-width: 900px) {
   .pop {
     grid-template-columns: repeat(25, 1fr);
+  }
+
+  .switch {
+    margin-left: 0;
   }
 }
 

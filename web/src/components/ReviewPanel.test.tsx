@@ -16,8 +16,8 @@ const review = (o: Record<string, unknown> = {}) => ({
   ...o,
 });
 
-type Opts = { items?: unknown[]; getStatus?: number; postStatus?: number };
-function setup({ items = [], getStatus = 200, postStatus = 201 }: Opts = {}) {
+type Opts = { items?: unknown[]; getStatus?: number; postStatus?: number; mode?: 'blind' };
+function setup({ items = [], getStatus = 200, postStatus = 201, mode }: Opts = {}) {
   const fetchMock = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
     if (init?.method === 'POST') {
       const b = JSON.parse(String(init.body));
@@ -31,7 +31,7 @@ function setup({ items = [], getStatus = 200, postStatus = 201 }: Opts = {}) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={client}>
-      <ReviewPanel playerId="S01" day={15} effectiveDay={12} />
+      <ReviewPanel playerId="S01" day={15} effectiveDay={12} mode={mode} />
     </QueryClientProvider>,
   );
   const posts = () => fetchMock.mock.calls.filter((c) => c[1]?.method === 'POST');
@@ -78,6 +78,16 @@ describe('ReviewPanel', () => {
     expect(screen.getByLabelText(/No concern/)).not.toBeChecked();
     expect(screen.getByRole('textbox', { name: /Note/ })).toHaveValue('');
     await waitFor(() => expect(gets()).toHaveLength(2));
+  });
+
+  it('reads and posts in blind mode', async () => {
+    const { posts, gets } = setup({ mode: 'blind' });
+    await screen.findByText('None yet.');
+    expect(String(gets()[0][0])).toContain('mode=blind');
+    fireEvent.click(screen.getByLabelText(/No concern/));
+    fireEvent.click(screen.getByRole('button', { name: 'Save review' }));
+    await waitFor(() => expect(posts()).toHaveLength(1));
+    expect(JSON.parse(String(posts()[0][1]?.body)).mode).toBe('blind');
   });
 
   it('clears the status line when the outcome changes', () => {

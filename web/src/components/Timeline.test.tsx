@@ -26,6 +26,34 @@ const base: TimelineProps = {
 
 const setup = (p: Partial<TimelineProps> = {}) => render(<Timeline {...base} {...p} />).container;
 
+describe('Timeline without scores', () => {
+  const blind = () => setup({ scores: undefined, firstHighDay: null, firstRuleDay: null });
+
+  it('draws deposit bars but no score line, dots or band cells', () => {
+    const c = blind();
+    expect(c.querySelectorAll('rect.dep')).toHaveLength(2);
+    expect(c.querySelector('path.score-line')).toBeNull();
+    expect(c.querySelector('.score-dot')).toBeNull();
+    expect(c.querySelector('.band-cell')).toBeNull();
+  });
+
+  it('crops the viewBox above the deposits block, full height with scores', () => {
+    const y = (c: Element) => Number(c.querySelector('svg')?.getAttribute('viewBox')?.split(' ')[1]);
+    expect(y(blind())).toBeGreaterThan(0);
+    expect(y(setup())).toBe(0);
+  });
+
+  it('has no band sentence in desc', () => {
+    expect(blind().querySelector('desc')?.textContent).toBe('Deposits per day for player S01 from day 0 to day 4.');
+  });
+
+  it('lists only the deposit entries in the blind legend', () => {
+    const { container } = render(<TimelineLegend blind />);
+    expect(container.querySelectorAll('span')).toHaveLength(2);
+    expect(container.textContent).toBe('Deposits per dayDay with a loss-chasing session');
+  });
+});
+
 describe('Timeline', () => {
   it('draws one band cell per high or elevated day', () => {
     const c = setup();

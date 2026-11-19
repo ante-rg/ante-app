@@ -248,14 +248,64 @@ func TestPlayer_Errors(t *testing.T) {
 	}{
 		{"/api/v1/players/S77", 404, "not_found"},
 		{"/api/v1/players/S01?as_of_day=99", 400, "bad_request"},
-		{"/api/v1/players/S01?mode=blind", 501, "not_implemented"},
 		{"/api/v1/players/S01?mode=blnd", 400, "bad_request"},
 		{"/api/v1/players/S77/timeline", 404, "not_found"},
 		{"/api/v1/players/S01/timeline?as_of_day=-1", 400, "bad_request"},
+		{"/api/v1/players/S01/timeline?as_of_day=5&mode=x", 400, "bad_request"},
 	} {
 		rec, body := get(t, s, c.path)
 		if rec.Code != c.code || body["code"] != c.body {
 			t.Errorf("%s = %d %v, want %d %s", c.path, rec.Code, body, c.code, c.body)
 		}
 	}
+}
+
+func rawKeys(t *testing.T, s *apihttp.Server, path string) map[string]json.RawMessage {
+	t.Helper()
+	rec, _ := get(t, s, path)
+	if rec.Code != 200 {
+		t.Fatalf("%s: code = %d %s", path, rec.Code, rec.Body)
+	}
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(rec.Body.Bytes(), &m); err != nil {
+		t.Fatal(err)
+	}
+	return m
+}
+
+func wantKeys(t *testing.T, m map[string]json.RawMessage, present bool, keys ...string) {
+	t.Helper()
+	for _, k := range keys {
+		if _, ok := m[k]; ok != present {
+			t.Errorf("key %q present = %v, want %v", k, ok, present)
+		}
+	}
+}
+
+func TestPlayer_Blind(t *testing.T) {
+	s := serve(t, playerFixture())
+	b := rawKeys(t, s, "/api/v1/players/S01?as_of_day=5&mode=blind")
+	wantKeys(t, b, false, "score", "band", "rank", "rank_of", "first_high_day", "first_rule_flag_day", "reasons", "rule_flags")
+	wantKeys(t, b, true, "player_id", "operator_code", "as_of_day", "effective_day", "days_observed", "sessions_to_date", "deposits_to_date", "meta")
+	n := rawKeys(t, s, "/api/v1/players/S01?as_of_day=5")
+	wantKeys(t, n, true, "score", "band", "reasons")
+}
+
+func TestTimeline_Blind(t *testing.T) {
+	s := serve(t, playerFixture())
+	b := rawKeys(t, s, "/api/v1/players/S01/timeline?as_of_day=5&mode=blind")
+	n := rawKeys(t, s, "/api/v1/players/S01/timeline?as_of_day=5")
+	wantKeys(t, b, true, "days")
+	wantKeys(t, b, false, "scores", "first_high_day", "first_rule_flag_day")
+	wantKeys(t, n, true, "scores")
+	if string(b["days"]) != string(n["days"]) {
+		t.Errorf("blind days = %s, want %s", b["days"], n["days"])
+	}
+}
+
+func TestTimeline_BlindNoActivity(t *testing.T) {
+	s := serve(t, playerFixture())
+	b := rawKeys(t, s, "/api/v1/players/S02/timeline?as_of_day=5&mode=blind")
+	eq(t, "days", string(b["days"]), "[]")
+	wantKeys(t, b, false, "scores")
 }

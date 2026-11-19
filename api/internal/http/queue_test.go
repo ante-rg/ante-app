@@ -199,7 +199,7 @@ func TestQueue(t *testing.T) {
 	t.Run("TestQueue_Errors", func(t *testing.T) {
 		for query, want := range map[string]int{
 			"as_of_day=-1": 400, "as_of_day=6": 400, "band=foo": 400, "band=high,foo": 400,
-			"capacity=0": 400, "capacity=1001": 400, "mode=blind": 501,
+			"capacity=0": 400, "capacity=1001": 400,
 			"mode=blnd": 400, "review_status=foo": 400,
 		} {
 			if rec, body := get(t, s, "/api/v1/queue?"+query); rec.Code != want {

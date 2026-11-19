@@ -31,7 +31,7 @@ export interface paths {
         /**
          * Review queue as of a replay day
          * @description Normal mode: players ranked by score, filtered by band and operator.
-         *     Blind mode: the fixed review sample in shuffled order; score, band, rank, source and reasons are omitted.
+         *     Blind mode: the fixed review sample in position order; score, band, rank, source and reasons are omitted.
          */
         get: operations["getQueue"];
         put?: never;
@@ -100,7 +100,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** All reviews of this player, newest first */
+        /**
+         * All reviews of this player, newest first
+         * @description Blind mode lists only the caller's own reviews saved in blind mode.
+         */
         get: operations["listPlayerReviews"];
         put?: never;
         /**
@@ -251,7 +254,7 @@ export interface components {
             as_of_day: number;
             /** @enum {string} */
             mode: "normal" | "blind";
-            /** @description Band counts across all operators; omitted in blind mode. */
+            /** @description Band counts across all operators; empty in blind mode. */
             counts: {
                 high?: number;
                 elevated?: number;
@@ -274,16 +277,24 @@ export interface components {
             deposits_to_date: number;
             /** Format: double */
             deposits_eur_to_date?: number;
+            /** @description Omitted in blind mode. */
             score?: number | null;
+            /** @description Omitted in blind mode. */
             band?: components["schemas"]["Band"];
+            /** @description Omitted in blind mode. */
             rank?: number;
-            /** @example 100 */
+            /**
+             * @description Omitted in blind mode.
+             * @example 100
+             */
             rank_of?: number;
-            /** @description First day this player entered the high band */
+            /** @description First day this player entered the high band. Omitted in blind mode. */
             first_high_day?: number | null;
-            /** @description First day any fixed rule fired */
+            /** @description First day any fixed rule fired. Omitted in blind mode. */
             first_rule_flag_day?: number | null;
+            /** @description Omitted in blind mode. */
             reasons?: components["schemas"]["Reason"][];
+            /** @description Omitted in blind mode. */
             rule_flags?: {
                 rule_id: string;
                 text: string;
@@ -314,12 +325,14 @@ export interface components {
         Timeline: {
             player_id: string;
             as_of_day: number;
+            /** @description Omitted in blind mode. */
             first_high_day?: number | null;
+            /** @description Omitted in blind mode. */
             first_rule_flag_day?: number | null;
             /** @description Only days with activity; the client fills gaps with zero. */
             days: components["schemas"]["TimelineDay"][];
-            /** @description One entry per day 0..effective day, ascending. Score is null where the model gave none. */
-            scores: components["schemas"]["TimelineScore"][];
+            /** @description One entry per day 0..effective day, ascending. Score is null where the model gave none. Omitted in blind mode. */
+            scores?: components["schemas"]["TimelineScore"][];
             meta: components["schemas"]["Meta"];
         };
         Session: {
@@ -532,7 +545,7 @@ export interface operations {
                 /** @description Comma-separated. Ignored in blind mode. */
                 band?: string;
                 review_status?: "all" | "pending" | "reviewed";
-                /** @description Review capacity, the number of rows returned. Defaults to the model card's default_capacity, else 10. */
+                /** @description Review capacity, the number of rows returned. Defaults to the model card's default_capacity, else 10. Ignored in blind mode. */
                 capacity?: number;
             };
             header?: never;
@@ -553,7 +566,6 @@ export interface operations {
             400: components["responses"]["Invalid"];
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
-            501: components["responses"]["NotImplemented"];
         };
     };
     getPlayer: {
@@ -583,7 +595,6 @@ export interface operations {
             400: components["responses"]["Invalid"];
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
-            501: components["responses"]["NotImplemented"];
         };
     };
     getPlayerTimeline: {
@@ -591,6 +602,7 @@ export interface operations {
             query?: {
                 /** @description Days since each player's own first activity. Defaults to replay.default_day. */
                 as_of_day?: components["parameters"]["AsOfDay"];
+                mode?: components["parameters"]["Mode"];
             };
             header?: never;
             path: {
@@ -649,6 +661,7 @@ export interface operations {
             query?: {
                 /** @description Days since each player's own first activity. Defaults to replay.default_day. */
                 as_of_day?: components["parameters"]["AsOfDay"];
+                mode?: components["parameters"]["Mode"];
             };
             header?: never;
             path: {

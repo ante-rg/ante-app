@@ -39,7 +39,7 @@ paths:
       summary: Review queue as of a replay day
       description: |
         Normal mode: players ranked by score, filtered by band and operator.
-        Blind mode: the fixed review sample in shuffled order; score, band, rank, source and reasons are omitted.
+        Blind mode: the fixed review sample in position order; score, band, rank, source and reasons are omitted.
       operationId: getQueue
       parameters:
         - $ref: "#/components/parameters/AsOfDay"
@@ -56,7 +56,7 @@ paths:
           schema: { type: string, enum: [all, pending, reviewed], default: all }
         - name: capacity
           in: query
-          description: Review capacity, the number of rows returned. Defaults to the model card's default_capacity, else 10.
+          description: Review capacity, the number of rows returned. Defaults to the model card's default_capacity, else 10. Ignored in blind mode.
           schema: { type: integer, minimum: 1, maximum: 1000 }
       responses:
         "200":
@@ -67,7 +67,6 @@ paths:
         "400": { $ref: "#/components/responses/Invalid" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
-        "501": { $ref: "#/components/responses/NotImplemented" }
 
   /api/v1/players/{player_id}:
     get:
@@ -87,7 +86,6 @@ paths:
         "400": { $ref: "#/components/responses/Invalid" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
-        "501": { $ref: "#/components/responses/NotImplemented" }
 
   /api/v1/players/{player_id}/timeline:
     get:
@@ -97,6 +95,7 @@ paths:
       parameters:
         - $ref: "#/components/parameters/PlayerId"
         - $ref: "#/components/parameters/AsOfDay"
+        - $ref: "#/components/parameters/Mode"
       responses:
         "200":
           description: OK
@@ -135,10 +134,12 @@ paths:
     get:
       tags: [reviews]
       summary: All reviews of this player, newest first
+      description: Blind mode lists only the caller's own reviews saved in blind mode.
       operationId: listPlayerReviews
       parameters:
         - $ref: "#/components/parameters/PlayerId"
         - $ref: "#/components/parameters/AsOfDay"
+        - $ref: "#/components/parameters/Mode"
       responses:
         "200":
           description: OK
@@ -383,7 +384,7 @@ components:
         mode: { type: string, enum: [normal, blind] }
         counts:
           type: object
-          description: Band counts across all operators; omitted in blind mode.
+          description: Band counts across all operators; empty in blind mode.
           properties:
             high: { type: integer }
             elevated: { type: integer }
@@ -409,18 +410,20 @@ components:
         sessions_to_date: { type: integer }
         deposits_to_date: { type: integer }
         deposits_eur_to_date: { type: number, format: double }
-        score: { type: [number, "null"] }
-        band: { $ref: "#/components/schemas/Band" }
-        rank: { type: integer }
-        rank_of: { type: integer, example: 100 }
-        first_high_day: { type: [integer, "null"], description: "First day this player entered the high band" }
-        first_rule_flag_day: { type: [integer, "null"], description: "First day any fixed rule fired" }
+        score: { type: [number, "null"], description: Omitted in blind mode. }
+        band: { $ref: "#/components/schemas/Band", description: Omitted in blind mode. }
+        rank: { type: integer, description: Omitted in blind mode. }
+        rank_of: { type: integer, example: 100, description: Omitted in blind mode. }
+        first_high_day: { type: [integer, "null"], description: "First day this player entered the high band. Omitted in blind mode." }
+        first_rule_flag_day: { type: [integer, "null"], description: "First day any fixed rule fired. Omitted in blind mode." }
         reasons:
           type: array
+          description: Omitted in blind mode.
           maxItems: 3
           items: { $ref: "#/components/schemas/Reason" }
         rule_flags:
           type: array
+          description: Omitted in blind mode.
           items:
             type: object
             required: [rule_id, text, first_day]
@@ -454,19 +457,19 @@ components:
 
     Timeline:
       type: object
-      required: [player_id, as_of_day, days, scores, meta]
+      required: [player_id, as_of_day, days, meta]
       properties:
         player_id: { type: string }
         as_of_day: { type: integer }
-        first_high_day: { type: [integer, "null"] }
-        first_rule_flag_day: { type: [integer, "null"] }
+        first_high_day: { type: [integer, "null"], description: Omitted in blind mode. }
+        first_rule_flag_day: { type: [integer, "null"], description: Omitted in blind mode. }
         days:
           type: array
           description: Only days with activity; the client fills gaps with zero.
           items: { $ref: "#/components/schemas/TimelineDay" }
         scores:
           type: array
-          description: One entry per day 0..effective day, ascending. Score is null where the model gave none.
+          description: One entry per day 0..effective day, ascending. Score is null where the model gave none. Omitted in blind mode.
           items: { $ref: "#/components/schemas/TimelineScore" }
         meta: { $ref: "#/components/schemas/Meta" }
 
