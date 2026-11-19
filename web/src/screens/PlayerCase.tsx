@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { useRef } from 'react';
-import { Link, useLocation, useParams } from 'react-router';
+import { Link, useLocation, useParams, useSearchParams } from 'react-router';
 import { ApiError, getPlayer, getTimeline, type PlayerCase } from '../api/client';
 import { BandChip } from '../components/BandChip';
 import { ReviewPanel } from '../components/ReviewPanel';
@@ -11,10 +11,11 @@ import { leadParts } from './lead';
 
 type CrumbState = { queueSearch?: string } | null;
 
-function Crumb({ id, day }: { id: string; day: number }) {
+function Crumb({ id, day, blind }: { id: string; day: number; blind: boolean }) {
   const state = useLocation().state as CrumbState;
   const q = new URLSearchParams(state?.queueSearch ?? '');
   q.set('day', String(day));
+  if (blind) q.set('mode', 'blind');
   return (
     <p className="crumb">
       <Link to={`/?${q}`}>Review queue</Link> <span className="soft">/ {id}</span>
@@ -69,24 +70,26 @@ function Reasons({ p }: { p: PlayerCase }) {
 export function PlayerCaseScreen() {
   const id = useParams().playerId ?? '';
   const { day } = useReplayDay();
+  const blind = useSearchParams()[0].get('mode') === 'blind';
+  const mode = blind ? 'blind' : undefined;
   const placeholderData = <T,>(prev: T | undefined, q: { queryKey: readonly unknown[] } | undefined) =>
-    q && q.queryKey[1] === id && (q.queryKey[2] as number) <= day ? prev : undefined;
+    q && q.queryKey[1] === id && q.queryKey[3] === mode && (q.queryKey[2] as number) <= day ? prev : undefined;
   const player = useQuery({
-    queryKey: ['player', id, day],
-    queryFn: ({ signal }) => getPlayer(id, day, signal),
+    queryKey: ['player', id, day, mode],
+    queryFn: ({ signal }) => getPlayer(id, day, signal, mode),
     placeholderData,
   });
   const timeline = useQuery({
-    queryKey: ['timeline', id, day],
-    queryFn: ({ signal }) => getTimeline(id, day, signal),
+    queryKey: ['timeline', id, day, mode],
+    queryFn: ({ signal }) => getTimeline(id, day, signal, mode),
     placeholderData,
   });
-  const lastP = useRef<{ id: string; day: number; data: PlayerCase }>(null);
-  const lastTl = useRef<{ id: string; day: number; data: NonNullable<typeof timeline.data> }>(null);
-  if (player.data && !player.isPlaceholderData) lastP.current = { id, day, data: player.data };
-  if (timeline.data && !timeline.isPlaceholderData) lastTl.current = { id, day, data: timeline.data };
-  const kept = <T,>(r: { id: string; day: number; data: T } | null) =>
-    r && r.id === id && r.day <= day ? r.data : undefined;
+  const lastP = useRef<{ id: string; day: number; blind: boolean; data: PlayerCase }>(null);
+  const lastTl = useRef<{ id: string; day: number; blind: boolean; data: NonNullable<typeof timeline.data> }>(null);
+  if (player.data && !player.isPlaceholderData) lastP.current = { id, day, blind, data: player.data };
+  if (timeline.data && !timeline.isPlaceholderData) lastTl.current = { id, day, blind, data: timeline.data };
+  const kept = <T,>(r: { id: string; day: number; blind: boolean; data: T } | null) =>
+    r && r.id === id && r.blind === blind && r.day <= day ? r.data : undefined;
   const notFound = player.error instanceof ApiError && player.error.code === 'not_found';
   const p = player.data ?? (player.isError && !notFound ? kept(lastP.current) : undefined);
   const tl = timeline.data ?? (timeline.isError ? kept(lastTl.current) : undefined);
@@ -94,7 +97,7 @@ export function PlayerCaseScreen() {
   if (!p) {
     return (
       <section className="screen" aria-labelledby="c-title">
-        <Crumb id={id} day={day} />
+        <Crumb id={id} day={day} blind={blind} />
         <h1 id="c-title">Player {id}</h1>
         {notFound ? (
           <p className="placeholder">Player {id} is not in this dataset.</p>
@@ -112,7 +115,7 @@ export function PlayerCaseScreen() {
   const e = p.effective_day;
   return (
     <section className="screen" aria-labelledby="c-title" aria-busy={player.isPlaceholderData}>
-      <Crumb id={id} day={day} />
+      <Crumb id={id} day={day} blind={blind} />
       {player.isError && (
         <p className="more soft" role="alert">
           Can't refresh this case. Showing the last loaded day.
@@ -127,38 +130,42 @@ export function PlayerCaseScreen() {
             {p.history_ended_on_day != null && ` History ends on day ${p.history_ended_on_day}.`}
           </p>
         </div>
-        <div className="scorebox">
-          <BandChip band={p.band ?? 'insufficient_data'} />
-          {p.score != null && (
-            <>
-              <span className="score">{p.score.toFixed(2)}</span>
-              {p.rank != null && (
-                <span className="soft">
-                  Rank {p.rank} of {p.rank_of}
-                </span>
-              )}
-            </>
-          )}
-          <span className="soft scorebox-caption">Relative priority for review</span>
-        </div>
-      </div>
-
-      <div className="lead">
-        {leadParts(p.first_high_day ?? null, p.first_rule_flag_day ?? null, e, p.history_ended_on_day != null).map(
-          (part) => (
-            <span key={part.before + (part.bold ?? '')} className={part.soft ? 'soft' : undefined}>
-              {part.before}
-              {part.bold && <strong>{part.bold}</strong>}
-              {part.after}
-            </span>
-          ),
+        {!blind && (
+          <div className="scorebox">
+            <BandChip band={p.band ?? 'insufficient_data'} />
+            {p.score != null && (
+              <>
+                <span className="score">{p.score.toFixed(2)}</span>
+                {p.rank != null && (
+                  <span className="soft">
+                    Rank {p.rank} of {p.rank_of}
+                  </span>
+                )}
+              </>
+            )}
+            <span className="soft scorebox-caption">Relative priority for review</span>
+          </div>
         )}
       </div>
+
+      {!blind && (
+        <div className="lead">
+          {leadParts(p.first_high_day ?? null, p.first_rule_flag_day ?? null, e, p.history_ended_on_day != null).map(
+            (part) => (
+              <span key={part.before + (part.bold ?? '')} className={part.soft ? 'soft' : undefined}>
+                {part.before}
+                {part.bold && <strong>{part.bold}</strong>}
+                {part.after}
+              </span>
+            ),
+          )}
+        </div>
+      )}
 
       <div className="panel">
         <div className="panel-h">
           <h2>Activity from day 0 to day {e}</h2>
-          <TimelineLegend />
+          <TimelineLegend blind={blind} />
         </div>
         <div className="panel-b">
           {tl && tl.as_of_day === p.as_of_day ? (
@@ -166,9 +173,9 @@ export function PlayerCaseScreen() {
               playerId={p.player_id}
               day={e}
               historyEndedOnDay={p.history_ended_on_day ?? null}
-              firstHighDay={p.first_high_day ?? null}
-              firstRuleDay={p.first_rule_flag_day ?? null}
-              scores={tl.scores}
+              firstHighDay={blind ? null : (p.first_high_day ?? null)}
+              firstRuleDay={blind ? null : (p.first_rule_flag_day ?? null)}
+              scores={blind ? undefined : tl.scores}
               days={tl.days}
             />
           ) : timeline.isError ? (
@@ -181,9 +188,15 @@ export function PlayerCaseScreen() {
         </div>
       </div>
 
-      <div className="grid2">
-        <Reasons p={p} />
-        <ReviewPanel key={p.player_id} playerId={p.player_id} day={p.as_of_day} effectiveDay={p.effective_day} />
+      <div className={blind ? undefined : 'grid2'}>
+        {!blind && <Reasons p={p} />}
+        <ReviewPanel
+          key={p.player_id}
+          playerId={p.player_id}
+          day={p.as_of_day}
+          effectiveDay={p.effective_day}
+          mode={mode}
+        />
       </div>
     </section>
   );

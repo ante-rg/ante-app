@@ -52,10 +52,7 @@ func (s *Server) GetPlayer(ctx context.Context, req gen.GetPlayerRequestObject) 
 	if err != nil {
 		return gen.GetPlayer400JSONResponse{InvalidJSONResponse: gen.InvalidJSONResponse(gen.Error{Code: "bad_request", Message: err.Error()})}, nil
 	}
-	if req.Params.Mode != nil && *req.Params.Mode == gen.GetPlayerParamsModeBlind {
-		return gen.GetPlayer501JSONResponse{NotImplementedJSONResponse: gen.NotImplementedJSONResponse(
-			gen.Error{Code: "not_implemented", Message: "Blind mode is not implemented yet"})}, nil
-	}
+	blind := req.Params.Mode != nil && *req.Params.Mode == gen.GetPlayerParamsModeBlind
 	r, err := s.playerRow(ctx, m, req.PlayerId, day)
 	if errors.Is(err, errPlayerNotFound) {
 		return gen.GetPlayer404JSONResponse{NotFoundJSONResponse: gen.NotFoundJSONResponse(playerNotFound())}, nil
@@ -74,15 +71,16 @@ func (s *Server) GetPlayer(ctx context.Context, req gen.GetPlayerRequestObject) 
 		SessionsToDate:    int(r.SessionsToDate),
 		DepositsToDate:    int(r.DepositsToDate),
 		DepositsEurToDate: &r.DepositsEurToDate,
-		Band:              &band,
-		RankOf:            new(int(r.RankOf)),
-		FirstHighDay:      dayPtr(r.FirstHighDay),
-		FirstRuleFlagDay:  dayPtr(r.FirstRuleFlagDay),
 		Meta:              m.meta(m.Card.DefaultCapacity),
 	}
 	if day > r.LastDay {
 		out.HistoryEndedOnDay = new(int(r.LastDay))
 	}
+	if blind {
+		return gen.GetPlayer200JSONResponse(out), nil
+	}
+	out.Band, out.RankOf = &band, new(int(r.RankOf))
+	out.FirstHighDay, out.FirstRuleFlagDay = dayPtr(r.FirstHighDay), dayPtr(r.FirstRuleFlagDay)
 	if r.Score.Valid {
 		out.Score = &r.Score.Float32
 	}
@@ -123,6 +121,9 @@ func (s *Server) GetPlayerTimeline(ctx context.Context, req gen.GetPlayerTimelin
 	if err != nil {
 		return nil, err
 	}
+	if req.Params.Mode != nil && !req.Params.Mode.Valid() {
+		return gen.GetPlayerTimeline400JSONResponse{InvalidJSONResponse: gen.InvalidJSONResponse(gen.Error{Code: "bad_request", Message: "mode must be normal or blind"})}, nil
+	}
 	day, err := m.dayFor(req.Params.AsOfDay)
 	if err != nil {
 		return gen.GetPlayerTimeline400JSONResponse{InvalidJSONResponse: gen.InvalidJSONResponse(gen.Error{Code: "bad_request", Message: err.Error()})}, nil
@@ -157,6 +158,11 @@ func (s *Server) GetPlayerTimeline(ctx context.Context, req gen.GetPlayerTimelin
 		}
 		days[i] = d
 	}
+	out := gen.Timeline{PlayerId: r.PlayerID, AsOfDay: int(day), Days: days, Meta: m.meta(m.Card.DefaultCapacity)}
+	if req.Params.Mode != nil && *req.Params.Mode == gen.GetPlayerTimelineParamsModeBlind {
+		return gen.GetPlayerTimeline200JSONResponse(out), nil
+	}
+	out.FirstHighDay, out.FirstRuleFlagDay = dayPtr(r.FirstHighDay), dayPtr(r.FirstRuleFlagDay)
 	srows, err := store.New(s.DB).ListTimelineScores(ctx, store.ListTimelineScoresParams{
 		ModelVersion: m.Version, PlayerID: r.PlayerID, EffectiveDay: min(day, r.LastDay),
 	})
@@ -173,9 +179,6 @@ func (s *Server) GetPlayerTimeline(ctx context.Context, req gen.GetPlayerTimelin
 			scores[i].Band = new(gen.Band(x.Band.String))
 		}
 	}
-	return gen.GetPlayerTimeline200JSONResponse(gen.Timeline{
-		PlayerId: r.PlayerID, AsOfDay: int(day), Days: days, Scores: scores,
-		FirstHighDay: dayPtr(r.FirstHighDay), FirstRuleFlagDay: dayPtr(r.FirstRuleFlagDay),
-		Meta: m.meta(m.Card.DefaultCapacity),
-	}), nil
+	out.Scores = &scores
+	return gen.GetPlayerTimeline200JSONResponse(out), nil
 }

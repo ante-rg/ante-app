@@ -82,3 +82,18 @@ SELECT g.day::int AS day, r.score, r.band
 FROM generate_series(0, @effective_day::int) AS g(day)
 LEFT JOIN daily_ranks r ON r.model_version = @model_version AND r.player_id = @player_id AND r.day = g.day
 ORDER BY g.day;
+
+-- name: ListBlindQueue :many
+SELECT s.player_id, p.operator_code, p.last_day, lr.outcome AS last_outcome
+FROM review_sample s
+JOIN players p ON p.player_id = s.player_id
+LEFT JOIN reviews lr ON lr.id = (
+  SELECT v.id FROM reviews v
+  WHERE v.player_id = s.player_id AND v.blind AND v.reviewer = @reviewer AND v.as_of_day <= @day
+  ORDER BY v.id DESC LIMIT 1)
+WHERE s.model_version = @model_version
+  AND (sqlc.narg(operator)::text IS NULL OR p.operator_code = sqlc.narg(operator)::text)
+  AND (sqlc.narg(review_status)::text IS NULL
+       OR (sqlc.narg(review_status)::text = 'pending' AND lr.id IS NULL)
+       OR (sqlc.narg(review_status)::text = 'reviewed' AND lr.id IS NOT NULL))
+ORDER BY s.position;

@@ -1,4 +1,4 @@
-import { act, fireEvent, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mockApi, renderApp, replayBody } from '../test/render';
 
@@ -49,6 +49,118 @@ const urls = (mock: ReturnType<typeof api>) =>
   mock.mock.calls.map((c) => String(c[0])).filter((u) => !u.includes('/reviews'));
 
 afterEach(() => vi.unstubAllGlobals());
+
+const blindPlayer = {
+  player_id: 'S01',
+  operator_code: 'P3',
+  as_of_day: 12,
+  effective_day: 12,
+  history_ended_on_day: null,
+  days_observed: 13,
+  sessions_to_date: 142,
+  deposits_to_date: 301,
+  deposits_eur_to_date: 9840,
+  meta,
+};
+const blindTimeline = { player_id: 'S01', as_of_day: 12, days: [{ day: 3, deposits_eur: 200 }], meta };
+const blindApi = () =>
+  mockApi({
+    '/api/v1/replay': { status: 200, body: replayBody },
+    '/api/v1/players/S01': { status: 200, body: blindPlayer },
+    '/api/v1/players/S01/timeline': { status: 200, body: blindTimeline },
+    '/api/v1/players/S01/reviews': { status: 200, body: { items: [] } },
+  });
+
+describe('PlayerCaseScreen blind', () => {
+  it('sends mode=blind on every request and hides score, lead and reasons', async () => {
+    const mock = blindApi();
+    renderApp('/players/S01?day=12&mode=blind');
+    expect(await screen.findByText(/Operator P3\. Day 12\./)).toBeInTheDocument();
+    await screen.findByRole('heading', { name: 'Activity from day 0 to day 12' });
+    await screen.findByText('None yet.');
+    const all = mock.mock.calls.map((c) => String(c[0])).filter((u) => u.includes('/players/'));
+    expect(all.length).toBeGreaterThanOrEqual(3);
+    for (const u of all) expect(u).toContain('mode=blind');
+    expect(document.querySelector('.scorebox')).toBeNull();
+    expect(document.querySelector('.lead')).toBeNull();
+    expect(screen.queryByText('Relative priority for review')).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Why this player is flagged' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Fixed rules')).not.toBeInTheDocument();
+    expect(document.querySelector('svg[role=img]')).toBeInTheDocument();
+    expect(document.querySelector('.tl-legend')?.textContent).not.toContain('Score');
+  });
+
+  it('does not wrap the lone review panel in grid2', async () => {
+    blindApi();
+    renderApp('/players/S01?day=12&mode=blind');
+    await screen.findByText('None yet.');
+    expect(document.querySelector('.grid2')).toBeNull();
+  });
+
+  it('draws no score line or lead marker even if the timeline response carries them', async () => {
+    mockApi({
+      '/api/v1/replay': { status: 200, body: replayBody },
+      '/api/v1/players/S01': { status: 200, body: { ...blindPlayer, first_high_day: 4 } },
+      '/api/v1/players/S01/timeline': { status: 200, body: timelineBody },
+      '/api/v1/players/S01/reviews': { status: 200, body: { items: [] } },
+    });
+    renderApp('/players/S01?day=12&mode=blind');
+    await screen.findByRole('heading', { name: 'Activity from day 0 to day 12' });
+    await screen.findByText('None yet.');
+    expect(screen.queryByText(/High from day/)).toBeNull();
+    expect(document.querySelector('svg[role=img]')?.textContent).not.toMatch(/score/i);
+  });
+
+  it('keeps mode=blind in the crumb', async () => {
+    blindApi();
+    renderApp('/players/S01?day=12&mode=blind');
+    await screen.findByText(/Operator P3/);
+    expect(document.querySelector('.crumb a')).toHaveAttribute('href', '/?day=12&mode=blind');
+  });
+
+  it('keeps mode=blind after the replay day changes', async () => {
+    const mock = blindApi();
+    const { router } = renderApp('/players/S01?day=12&mode=blind');
+    await screen.findByText(/Operator P3/);
+    await act(() => router.navigate('/players/S01?day=8&mode=blind'));
+    await waitFor(() => expect(urls(mock).filter((u) => u.includes('as_of_day=8'))).toHaveLength(2));
+    for (const u of urls(mock).filter((x) => x.includes('/players/'))) expect(u).toContain('mode=blind');
+  });
+
+  it('saves a blind review', async () => {
+    const mock = blindApi();
+    renderApp('/players/S01?day=12&mode=blind');
+    await screen.findByText('None yet.');
+    mock.mockImplementation(async (_i: RequestInfo | URL, init?: RequestInit) =>
+      init?.method === 'POST'
+        ? new Response(JSON.stringify({ id: 1, ...JSON.parse(String(init.body)) }), { status: 201 })
+        : new Response(JSON.stringify({ items: [] }), { status: 200 }),
+    );
+    fireEvent.click(screen.getByLabelText(/No concern/));
+    fireEvent.click(screen.getByRole('button', { name: 'Save review' }));
+    const calls = () => mock.mock.calls as unknown as [RequestInfo | URL, RequestInit?][];
+    await waitFor(() => expect(calls().some((c) => c[1]?.method === 'POST')).toBe(true));
+    expect(JSON.parse(String(calls().find((c) => c[1]?.method === 'POST')?.[1]?.body)).mode).toBe('blind');
+  });
+
+  it('keeps mode=blind on the Review queue nav link only in blind mode', async () => {
+    blindApi();
+    const { router } = renderApp('/players/S01?day=12&mode=blind');
+    await screen.findByText(/Operator P3/);
+    const link = () =>
+      within(screen.getByRole('navigation', { name: 'Main' })).getByRole('link', { name: 'Review queue' });
+    expect(link().getAttribute('href')).toContain('mode=blind');
+    await act(() => router.navigate('/players/S01?day=12'));
+    expect(link().getAttribute('href')).not.toContain('mode=blind');
+  });
+
+  it('leaves the normal URL without mode', async () => {
+    const mock = api();
+    renderApp('/players/S01?day=12');
+    await screen.findByText(/Operator P3/);
+    expect(urls(mock).every((u) => !u.includes('mode='))).toBe(true);
+  });
+});
 
 describe('PlayerCaseScreen', () => {
   it('renders the header, lead, timeline, reasons and rules', async () => {
