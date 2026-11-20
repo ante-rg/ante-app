@@ -144,10 +144,10 @@ func TestAuth_DevIgnoresHeader(t *testing.T) {
 func TestAudit_Ingest(t *testing.T) {
 	fa := &fakeAudit{}
 	rec := serve(t, cfAuth, fa, httptest.NewRequest("POST", "/ingest/v1/events", nil))
-	if rec.Code != 200 {
+	if rec.Code != 401 {
 		t.Fatalf("code = %d", rec.Code)
 	}
-	wantRow(t, fa, "anonymous", "POST", "/ingest/v1/events", 200)
+	wantRow(t, fa, "anonymous", "POST", "/ingest/v1/events", 401)
 }
 
 func TestAudit_SkipsHealthAndSPA(t *testing.T) {
@@ -214,5 +214,5 @@ func TestNewRouter_PanicsWithoutAuthMode(t *testing.T) {
 			t.Fatal("want panic")
 		}
 	}()
-	NewRouter(stubAPI, t.TempDir(), Auth{}, &fakeAudit{})
+	NewRouter(stubAPI, t.TempDir(), Auth{}, &fakeAudit{}, noKeys{})
 }

@@ -117,7 +117,7 @@ func TestSchema(t *testing.T) {
 			t.Fatal(err)
 		}
 		want := []string{"operators", "players", "models", "daily_scores", "daily_activity", "sessions",
-			"rule_flags", "review_sample", "audit_log", "daily_ranks", "reviews", "goose_db_version"}
+			"rule_flags", "review_sample", "audit_log", "daily_ranks", "reviews", "events", "goose_db_version"}
 		slices.Sort(got)
 		slices.Sort(want)
 		if !slices.Equal(got, want) {

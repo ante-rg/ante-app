@@ -47,6 +47,14 @@ type DailyScore struct {
 	Reasons      []byte
 }
 
+type Event struct {
+	OperatorCode string
+	PlayerID     string
+	EventOrder   int64
+	Payload      []byte
+	ReceivedAt   pgtype.Timestamptz
+}
+
 type Model struct {
 	ModelVersion string
 	Card         []byte

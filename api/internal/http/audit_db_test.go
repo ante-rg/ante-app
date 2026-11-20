@@ -24,7 +24,7 @@ func TestAudit_WritesRow(t *testing.T) {
 		t.Fatal(err)
 	}
 	stub := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
-	h := apihttp.NewRouter(stub, os.TempDir(), apihttp.Auth{DevUser: "dev@localhost"}, store.New(pool))
+	h := apihttp.NewRouter(stub, os.TempDir(), apihttp.Auth{DevUser: "dev@localhost"}, store.New(pool), store.New(pool))
 
 	h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("GET", "/api/v1/queue", nil))
 
