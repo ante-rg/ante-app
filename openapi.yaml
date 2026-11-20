@@ -213,6 +213,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/ModelCard" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   /ingest/v1/events:
     post:
@@ -537,27 +538,34 @@ components:
 
     ModelCard:
       type: object
-      required: [model_version, summary, limits, metrics]
+      required: [model_version, summary, label_definition, intended_use, data_protection, ethical_risks, limits, default_capacity, metrics]
       properties:
         model_version: { type: string }
+        synthetic: { type: boolean, description: "True when the artifacts are dummy data" }
         trained_at: { type: string, format: date-time }
         summary: { type: string, description: "Plain-language description of what the score means" }
         label_definition: { type: string }
+        intended_use: { type: string }
+        data_protection: { type: string }
+        ethical_risks: { type: string }
         limits:
           type: array
           items: { type: string }
+        default_capacity: { type: integer, minimum: 1, maximum: 1000, description: "Review capacity the evaluation numbers are quoted at" }
         metrics:
           type: array
-          description: One row per observation window and evaluation split
-          items:
-            type: object
-            required: [window_days, split, method, precision_top20, recall_top20]
-            properties:
-              window_days: { type: integer, enum: [7, 14, 30] }
-              split: { type: string, description: "'all' or a held-out operator code", example: P3 }
-              method: { type: string, enum: [model, rules] }
-              precision_top20: { type: number }
-              recall_top20: { type: number }
+          description: One row per observation window, evaluation split and method
+          items: { $ref: "#/components/schemas/ModelMetric" }
+
+    ModelMetric:
+      type: object
+      required: [window_days, split, method, early_recall, median_lead_days]
+      properties:
+        window_days: { type: integer, enum: [7, 14, 30] }
+        split: { type: string, description: "'all' or a held-out operator code", example: P3 }
+        method: { type: string, enum: [model, rules] }
+        early_recall: { type: number, minimum: 0, maximum: 1 }
+        median_lead_days: { type: [number, "null"], minimum: 0 }
 
     Event:
       type: object

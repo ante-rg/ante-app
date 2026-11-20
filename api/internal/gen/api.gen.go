@@ -158,14 +158,14 @@ func (e HealthStatus) Valid() bool {
 	}
 }
 
-// Defines values for ModelCardMetricsMethod.
+// Defines values for ModelMetricMethod.
 const (
-	Model ModelCardMetricsMethod = "model"
-	Rules ModelCardMetricsMethod = "rules"
+	Model ModelMetricMethod = "model"
+	Rules ModelMetricMethod = "rules"
 )
 
-// Valid indicates whether the value is a known member of the ModelCardMetricsMethod enum.
-func (e ModelCardMetricsMethod) Valid() bool {
+// Valid indicates whether the value is a known member of the ModelMetricMethod enum.
+func (e ModelMetricMethod) Valid() bool {
 	switch e {
 	case Model:
 		return true
@@ -176,15 +176,15 @@ func (e ModelCardMetricsMethod) Valid() bool {
 	}
 }
 
-// Defines values for ModelCardMetricsWindowDays.
+// Defines values for ModelMetricWindowDays.
 const (
-	N14 ModelCardMetricsWindowDays = 14
-	N30 ModelCardMetricsWindowDays = 30
-	N7  ModelCardMetricsWindowDays = 7
+	N14 ModelMetricWindowDays = 14
+	N30 ModelMetricWindowDays = 30
+	N7  ModelMetricWindowDays = 7
 )
 
-// Valid indicates whether the value is a known member of the ModelCardMetricsWindowDays enum.
-func (e ModelCardMetricsWindowDays) Valid() bool {
+// Valid indicates whether the value is a known member of the ModelMetricWindowDays enum.
+func (e ModelMetricWindowDays) Valid() bool {
 	switch e {
 	case N14:
 		return true
@@ -471,31 +471,43 @@ type Meta struct {
 
 // ModelCard defines model for ModelCard.
 type ModelCard struct {
-	LabelDefinition *string  `json:"label_definition,omitempty"`
+	DataProtection string `json:"data_protection"`
+
+	// DefaultCapacity Review capacity the evaluation numbers are quoted at
+	DefaultCapacity int      `json:"default_capacity"`
+	EthicalRisks    string   `json:"ethical_risks"`
+	IntendedUse     string   `json:"intended_use"`
+	LabelDefinition string   `json:"label_definition"`
 	Limits          []string `json:"limits"`
 
-	// Metrics One row per observation window and evaluation split
-	Metrics []struct {
-		Method         ModelCardMetricsMethod `json:"method"`
-		PrecisionTop20 float32                `json:"precision_top20"`
-		RecallTop20    float32                `json:"recall_top20"`
-
-		// Split 'all' or a held-out operator code
-		Split      string                     `json:"split"`
-		WindowDays ModelCardMetricsWindowDays `json:"window_days"`
-	} `json:"metrics"`
-	ModelVersion string `json:"model_version"`
+	// Metrics One row per observation window, evaluation split and method
+	Metrics      []ModelMetric `json:"metrics"`
+	ModelVersion string        `json:"model_version"`
 
 	// Summary Plain-language description of what the score means
-	Summary   string     `json:"summary"`
+	Summary string `json:"summary"`
+
+	// Synthetic True when the artifacts are dummy data
+	Synthetic *bool      `json:"synthetic,omitempty"`
 	TrainedAt *time.Time `json:"trained_at,omitempty"`
 }
 
-// ModelCardMetricsMethod defines model for ModelCard.Metrics.Method.
-type ModelCardMetricsMethod string
+// ModelMetric defines model for ModelMetric.
+type ModelMetric struct {
+	EarlyRecall    float32           `json:"early_recall"`
+	MedianLeadDays *float32          `json:"median_lead_days"`
+	Method         ModelMetricMethod `json:"method"`
 
-// ModelCardMetricsWindowDays defines model for ModelCard.Metrics.WindowDays.
-type ModelCardMetricsWindowDays int
+	// Split 'all' or a held-out operator code
+	Split      string                `json:"split"`
+	WindowDays ModelMetricWindowDays `json:"window_days"`
+}
+
+// ModelMetricMethod defines model for ModelMetric.Method.
+type ModelMetricMethod string
+
+// ModelMetricWindowDays defines model for ModelMetric.WindowDays.
+type ModelMetricWindowDays int
 
 // OperatorCode defines model for OperatorCode.
 type OperatorCode = string
@@ -1795,6 +1807,20 @@ func (response GetModelCard401JSONResponse) VisitGetModelCardResponse(w http.Res
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetModelCard404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetModelCard404JSONResponse) VisitGetModelCardResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
 	return err
 }
