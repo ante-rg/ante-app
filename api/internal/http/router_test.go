@@ -1,12 +1,16 @@
 package http
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 func testRouter(t *testing.T) http.Handler {
@@ -20,7 +24,17 @@ func routerWith(t *testing.T, api http.Handler) http.Handler {
 	return routerWithAuth(t, api, Auth{DevUser: "dev@localhost"}, &fakeAudit{})
 }
 
+type noKeys struct{}
+
+func (noKeys) OperatorByKeyHash(context.Context, pgtype.Text) (string, error) {
+	return "", pgx.ErrNoRows
+}
+
 func routerWithAuth(t *testing.T, api http.Handler, a Auth, aw AuditWriter) http.Handler {
+	return routerWithKeys(t, api, a, aw, noKeys{})
+}
+
+func routerWithKeys(t *testing.T, api http.Handler, a Auth, aw AuditWriter, kl KeyLookup) http.Handler {
 	t.Helper()
 	dir := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(dir, "assets"), 0o755); err != nil {
@@ -32,7 +46,7 @@ func routerWithAuth(t *testing.T, api http.Handler, a Auth, aw AuditWriter) http
 	if err := os.WriteFile(filepath.Join(dir, "assets", "app.js"), []byte("console.log(1)"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	return NewRouter(api, dir, a, aw)
+	return NewRouter(api, dir, a, aw, kl)
 }
 
 func do(h http.Handler, method, path string) *httptest.ResponseRecorder {
@@ -75,9 +89,12 @@ func TestRouter_IndexIsNoCache(t *testing.T) {
 }
 
 func TestRouter_UnknownAPIPathIs404JSON(t *testing.T) {
-	h := routerWith(t, NewAPIHandler(&Server{}))
+	h := routerWithKeys(t, NewAPIHandler(&Server{}), Auth{DevUser: "dev@localhost"}, &fakeAudit{}, p3Keys)
 	for _, c := range [][2]string{{"GET", "/api/v1/nope"}, {"POST", "/ingest/v1/nope"}} {
-		rec := do(h, c[0], c[1])
+		req := httptest.NewRequest(c[0], c[1], nil)
+		req.Header.Set("X-API-Key", testKey)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
 		if rec.Code != 404 || rec.Header().Get("Content-Type") != "application/json" || strings.Contains(rec.Body.String(), "<html>") {
 			t.Fatalf("%v: got %d %q %q", c, rec.Code, rec.Header().Get("Content-Type"), rec.Body.String())
 		}
