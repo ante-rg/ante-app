@@ -154,6 +154,69 @@ func (q *Queries) ListBlindQueue(ctx context.Context, arg ListBlindQueueParams) 
 	return items, nil
 }
 
+const listOperatorSummaries = `-- name: ListOperatorSummaries :many
+SELECT o.code AS operator_code,
+       count(r.player_id)::int AS players,
+       (count(*) FILTER (WHERE r.band = 'high'))::int AS high,
+       (count(*) FILTER (WHERE r.band = 'elevated'))::int AS elevated,
+       (count(*) FILTER (WHERE r.band = 'low'))::int AS low,
+       (count(*) FILTER (WHERE r.band = 'insufficient_data'))::int AS insufficient_data,
+       (count(*) FILTER (WHERE r.band IN ('high', 'elevated') AND EXISTS (
+            SELECT 1 FROM rule_flags f WHERE f.player_id = r.player_id AND f.day <= least($1::int, p.last_day))))::int AS flagged_by_rules_too,
+       (count(*) FILTER (WHERE r.player_id IS NOT NULL AND EXISTS (
+            SELECT 1 FROM reviews v WHERE v.player_id = r.player_id AND v.as_of_day <= $1::int)))::int AS reviewed
+FROM operators o
+LEFT JOIN players p ON p.operator_code = o.code
+LEFT JOIN daily_ranks r ON r.model_version = $2 AND r.day = $1 AND r.player_id = p.player_id
+GROUP BY o.code
+ORDER BY o.code
+`
+
+type ListOperatorSummariesParams struct {
+	Day          int32
+	ModelVersion string
+}
+
+type ListOperatorSummariesRow struct {
+	OperatorCode      string
+	Players           int32
+	High              int32
+	Elevated          int32
+	Low               int32
+	InsufficientData  int32
+	FlaggedByRulesToo int32
+	Reviewed          int32
+}
+
+func (q *Queries) ListOperatorSummaries(ctx context.Context, arg ListOperatorSummariesParams) ([]ListOperatorSummariesRow, error) {
+	rows, err := q.db.Query(ctx, listOperatorSummaries, arg.Day, arg.ModelVersion)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListOperatorSummariesRow
+	for rows.Next() {
+		var i ListOperatorSummariesRow
+		if err := rows.Scan(
+			&i.OperatorCode,
+			&i.Players,
+			&i.High,
+			&i.Elevated,
+			&i.Low,
+			&i.InsufficientData,
+			&i.FlaggedByRulesToo,
+			&i.Reviewed,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listPlayerRuleFlags = `-- name: ListPlayerRuleFlags :many
 SELECT f.rule_id, min(f.rule_text)::text AS rule_text, min(f.day)::int AS first_day
 FROM rule_flags f
