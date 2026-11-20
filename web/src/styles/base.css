@@ -267,6 +267,13 @@ h1 {
   margin-top: var(--s3);
 }
 
+.pop.pop-row {
+  grid-template-columns: repeat(20, 1fr);
+  gap: 1px;
+  margin-top: 0;
+  min-width: calc(var(--s7) * 3);
+}
+
 .pop i {
   aspect-ratio: 1;
   border-radius: 1px;
