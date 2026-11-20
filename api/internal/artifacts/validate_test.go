@@ -1,7 +1,9 @@
 package artifacts
 
 import (
+	"fmt"
 	"math"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -196,20 +198,45 @@ func TestValidate_LastDayTooLarge(t *testing.T) {
 	}, Error{File: FilePlayers, Row: 5, Column: "last_day"})
 }
 
-func TestValidate_ScoreGap(t *testing.T) {
-	check(t, func(dir string, fo *Folder) {
-		id := playerRows(t, fo)[16].PlayerID
-		var rows []sRow
-		var mine []int
-		for k, r := range scoreRows(t, fo) {
-			rows = append(rows, r)
-			if r.PlayerID == id {
-				mine = append(mine, k)
-			}
+func dropDays(t *testing.T, dir string, fo *Folder, idx int, days ...int32) {
+	t.Helper()
+	id := playerRows(t, fo)[idx].PlayerID
+	var rows []sRow
+	for _, r := range scoreRows(t, fo) {
+		if r.PlayerID == id && slices.Contains(days, r.Day) {
+			continue
 		}
-		drop := mine[len(mine)/2]
-		writeFile(t, dir, FileScores, append(rows[:drop:drop], rows[drop+1:]...))
-	}, Error{File: FileScores, Rule: "player at players.parquet row 17: missing days"})
+		rows = append(rows, r)
+	}
+	writeFile(t, dir, FileScores, rows)
+}
+
+func TestValidate_ScoreGapEnds(t *testing.T) {
+	fo, err := Open(dummy(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	const idx = 16
+	players := playerRows(t, fo)
+	if players[idx].LastDay < 3 {
+		t.Fatal("player 17 needs last_day >= 3")
+	}
+	last := players[idx].LastDay
+	for name, tc := range map[string]struct {
+		drop []int32
+		want int32
+	}{
+		"day 0":    {[]int32{0}, 0},
+		"last day": {[]int32{last}, last},
+		"two gaps": {[]int32{1, 3}, 1},
+		"middle":   {[]int32{last / 2}, last / 2},
+	} {
+		t.Run(name, func(t *testing.T) {
+			check(t, func(dir string, fo *Folder) {
+				dropDays(t, dir, fo, idx, tc.drop...)
+			}, Error{File: FileScores, Rule: fmt.Sprintf("player at players.parquet row %d: missing day %d", idx+1, tc.want)})
+		})
+	}
 }
 
 func TestValidate_PlayerWithoutScores(t *testing.T) {
@@ -222,7 +249,7 @@ func TestValidate_PlayerWithoutScores(t *testing.T) {
 			}
 		}
 		writeFile(t, dir, FileScores, rows)
-	}, Error{File: FileScores, Rule: "player at players.parquet row 1: missing days"})
+	}, Error{File: FileScores, Rule: "player at players.parquet row 1: missing day 0"})
 }
 
 func TestValidate_ScoreRowErrors(t *testing.T) {
