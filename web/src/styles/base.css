@@ -836,3 +836,34 @@ tbody tr.go:focus-visible {
 .history li + li {
   margin-top: var(--s2);
 }
+
+.about-sec {
+  padding: var(--s4);
+  white-space: pre-line;
+}
+
+.about-sec h2 {
+  font-size: var(--text-lg);
+  margin: 0 0 var(--s2);
+}
+
+.about-sec ul {
+  margin: 0;
+  padding-left: var(--s5);
+}
+
+.about-note {
+  padding: var(--s3) var(--s4);
+  border: 1px solid var(--rule);
+  background: var(--sunken);
+}
+
+.about-sec caption {
+  text-align: left;
+  font-weight: 700;
+  padding: var(--s3) 0 var(--s2);
+}
+
+.about-sec th[scope="row"] {
+  color: var(--ink);
+}

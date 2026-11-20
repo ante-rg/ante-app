@@ -13,6 +13,8 @@ export type ReviewCreate = components['schemas']['ReviewCreate'];
 export type Outcome = components['schemas']['Outcome'];
 export type OperatorSummary = components['schemas']['OperatorSummary'];
 export type Operators = operations['listOperators']['responses'][200]['content']['application/json'];
+export type ModelCard = components['schemas']['ModelCard'];
+export type ModelMetric = components['schemas']['ModelMetric'];
 export type Band = components['schemas']['Band'];
 export type Mode = 'blind';
 
@@ -67,6 +69,10 @@ export function getQueue(p: QueueParams, signal?: AbortSignal): Promise<Queue> {
 
 export function getOperators(asOfDay: number, signal?: AbortSignal): Promise<Operators> {
   return getJSON<Operators>(`/api/v1/operators?as_of_day=${asOfDay}`, signal);
+}
+
+export function getModelCard(signal?: AbortSignal): Promise<ModelCard> {
+  return getJSON<ModelCard>('/api/v1/model', signal);
 }
 
 const modeQ = (mode?: Mode) => (mode === 'blind' ? '&mode=blind' : '');

@@ -1,9 +1,9 @@
 import { Link, Outlet, type RouteObject, useLocation, useSearchParams } from 'react-router';
 import { ReplayControl } from './replay/ReplayControl';
 import { ReplayDayProvider, ReplayGate, useOptionalReplayDay } from './replay/ReplayDay';
+import { AboutScreen } from './screens/About';
 import { Health } from './screens/Health';
 import { OperatorsScreen } from './screens/Operators';
-import { Placeholder } from './screens/Placeholder';
 import { PlayerCaseScreen } from './screens/PlayerCase';
 import { QueueScreen } from './screens/Queue';
 
@@ -66,7 +66,7 @@ export const routes: RouteObject[] = [
       { path: '/', element: <QueueScreen /> },
       { path: '/players/:playerId', element: <PlayerCaseScreen /> },
       { path: '/operators', element: <OperatorsScreen /> },
-      { path: '/about', element: <Placeholder title="About the score" /> },
+      { path: '/about', element: <AboutScreen /> },
     ],
   },
   {

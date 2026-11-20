@@ -77,7 +77,3 @@ func responseError(w http.ResponseWriter, _ *http.Request, err error) {
 func (s *Server) ListPlayerSessions(context.Context, gen.ListPlayerSessionsRequestObject) (gen.ListPlayerSessionsResponseObject, error) {
 	return nil, errNotImplemented
 }
-
-func (s *Server) GetModelCard(context.Context, gen.GetModelCardRequestObject) (gen.GetModelCardResponseObject, error) {
-	return nil, errNotImplemented
-}
