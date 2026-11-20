@@ -31,6 +31,7 @@ func (failDB) Exec(context.Context, string, ...any) (pgconn.CommandTag, error) {
 func (failDB) Query(context.Context, string, ...any) (pgx.Rows, error) {
 	return nil, errors.New("db down")
 }
+func (failDB) Begin(context.Context) (pgx.Tx, error)            { return nil, errors.New("db down") }
 func (failDB) QueryRow(context.Context, string, ...any) pgx.Row { return failRow{} }
 
 type failRow struct{}
@@ -84,7 +85,7 @@ func TestCreateReview_MissingDayNeedsNoDB(t *testing.T) {
 func TestCreateReview_NoteNotLogged(t *testing.T) {
 	buf := captureLog(t)
 
-	h := apihttp.NewRouter(apihttp.NewAPIHandler(&apihttp.Server{}), t.TempDir(), apihttp.Auth{DevUser: "dev@localhost"}, noAudit{})
+	h := apihttp.NewRouter(apihttp.NewAPIHandler(&apihttp.Server{}), t.TempDir(), apihttp.Auth{DevUser: "dev@localhost"}, noAudit{}, p3Lookup{})
 	body := `{"as_of_day":1,"outcome":"bad","note":"SECRET-NOTE-123","mode":"normal"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/players/S01/reviews", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")

@@ -59,7 +59,7 @@ func run() error {
 		authMode = "cloudflare_access"
 		a = apihttp.Auth{Verifier: auth.NewAccess(ctx, cfg.CFAccessTeamDomain, cfg.CFAccessAUD)}
 	}
-	srv := &http.Server{Addr: cfg.Addr, Handler: apihttp.NewRouter(api, cfg.WebDir, a, store.New(pool)), ReadHeaderTimeout: 10 * time.Second}
+	srv := &http.Server{Addr: cfg.Addr, Handler: apihttp.NewRouter(api, cfg.WebDir, a, store.New(pool), store.New(pool)), ReadHeaderTimeout: 10 * time.Second}
 
 	errc := make(chan error, 1)
 	go func() { errc <- srv.ListenAndServe() }()
