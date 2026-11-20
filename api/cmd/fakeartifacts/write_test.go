@@ -94,23 +94,20 @@ func TestRun_WritesAllFiles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var card struct {
-		ModelVersion    string            `json:"model_version"`
-		Synthetic       bool              `json:"synthetic"`
-		DefaultDay      int               `json:"default_day"`
-		DefaultCapacity int               `json:"default_capacity"`
-		Sections        map[string]string `json:"sections"`
-	}
+	var card map[string]any
 	if err := json.Unmarshal(raw, &card); err != nil {
 		t.Fatal(err)
 	}
-	if card.ModelVersion != "dummy-v0" || !card.Synthetic || card.DefaultDay != 120 || card.DefaultCapacity != 10 {
+	if card["model_version"] != "dummy-v0" || card["synthetic"] != true || card["default_day"] != 120.0 || card["default_capacity"] != 10.0 {
 		t.Errorf("card = %+v", card)
 	}
-	for _, k := range []string{"summary", "intended_use", "limitations"} {
-		if card.Sections[k] == "" {
-			t.Errorf("sections.%s empty", k)
+	for _, k := range []string{"summary", "label_definition", "intended_use", "data_protection", "ethical_risks"} {
+		if s, _ := card[k].(string); s == "" {
+			t.Errorf("%s empty", k)
 		}
+	}
+	if m, _ := card["metrics"].([]any); len(m) == 0 {
+		t.Error("metrics empty")
 	}
 }
 

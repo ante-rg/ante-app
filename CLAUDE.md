@@ -80,7 +80,7 @@ scorer/         Python 3.12 FastAPI service, managed with uv
   tests/
 web/            React + TypeScript (Vite)
   src/api/        openapi-typescript types and a thin fetch client
-  src/screens/    Health now; Queue, PlayerCase, Operators, About later
+  src/screens/    Health, Queue, PlayerCase, Operators, About
   src/styles/     tokens.css, base.css
   src/test/       Vitest setup
 deploy/         docker-compose.yml, local.yml, .env.example

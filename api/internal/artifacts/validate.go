@@ -20,6 +20,7 @@ type validator struct {
 	fo      *Folder
 	players map[string]*pstate
 	order   []*pstate
+	ops     map[string]bool
 }
 
 const maxLastDay = 36500
@@ -31,9 +32,9 @@ func bad(file string, row int, column, rule string) error {
 func finite(x float64) bool { return !math.IsNaN(x) && !math.IsInf(x, 0) }
 
 func (fo *Folder) Validate() error {
-	v := &validator{fo: fo, players: map[string]*pstate{}}
+	v := &validator{fo: fo, players: map[string]*pstate{}, ops: map[string]bool{}}
 	for _, step := range []func() error{
-		v.players1, v.scores, v.activity, v.sessions, v.flags, v.sample,
+		v.players1, v.scores, v.activity, v.sessions, v.flags, v.sample, v.card,
 	} {
 		if err := step(); err != nil {
 			return err
@@ -62,6 +63,7 @@ func (v *validator) players1() error {
 		}
 		ps := &pstate{row: row, lastDay: p.LastDay}
 		v.players[p.PlayerID] = ps
+		v.ops[p.OperatorCode] = true
 		v.order = append(v.order, ps)
 		return nil
 	})
