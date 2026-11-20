@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"slices"
 	"strings"
 )
 
@@ -157,7 +158,8 @@ func (v *validator) scores() error {
 	}
 	for _, ps := range v.order {
 		if int(ps.scoreN) != int(ps.lastDay)+1 {
-			return bad(FileScores, 0, "", fmt.Sprintf("player at players.parquet row %d: missing days", ps.row))
+			d := slices.Index(ps.scoreSeen, false)
+			return bad(FileScores, 0, "", fmt.Sprintf("player at players.parquet row %d: missing day %d", ps.row, max(d, 0)))
 		}
 	}
 	return nil
