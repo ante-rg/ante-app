@@ -3,6 +3,7 @@ import { type KeyboardEvent, useState } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router';
 import { getQueue, type Queue, type QueueItem } from '../api/client';
 import { BandChip } from '../components/BandChip';
+import { BandSquares } from '../components/BandSquares';
 import { Sparkline } from '../components/Sparkline';
 import { outcomeLabel } from '../format';
 import { useReplayDay } from '../replay/ReplayDay';
@@ -34,16 +35,7 @@ function Population({ counts, day }: { counts: Queue['counts']; day: number }) {
         <h2>All {total} players by band</h2>
         <span className="example">Each square is one player, ordered by score.</span>
       </div>
-      <div
-        className="pop"
-        role="img"
-        aria-label={`${high} high, ${elevated} elevated, ${low} low, ${none} with not enough data`}
-      >
-        {groups.flatMap((g) =>
-          // biome-ignore lint/suspicious/noArrayIndexKey: static squares, never reordered
-          Array.from({ length: g.n }, (_, i) => <i key={`${g.cls}${i}`} className={g.cls} />),
-        )}
-      </div>
+      <BandSquares className="pop" high={high} elevated={elevated} low={low} none={none} />
       <div className="popkey">
         {groups.map((g) => (
           <span key={g.cls}>

@@ -97,3 +97,20 @@ WHERE s.model_version = @model_version
        OR (sqlc.narg(review_status)::text = 'pending' AND lr.id IS NULL)
        OR (sqlc.narg(review_status)::text = 'reviewed' AND lr.id IS NOT NULL))
 ORDER BY s.position;
+
+-- name: ListOperatorSummaries :many
+SELECT o.code AS operator_code,
+       count(r.player_id)::int AS players,
+       (count(*) FILTER (WHERE r.band = 'high'))::int AS high,
+       (count(*) FILTER (WHERE r.band = 'elevated'))::int AS elevated,
+       (count(*) FILTER (WHERE r.band = 'low'))::int AS low,
+       (count(*) FILTER (WHERE r.band = 'insufficient_data'))::int AS insufficient_data,
+       (count(*) FILTER (WHERE r.band IN ('high', 'elevated') AND EXISTS (
+            SELECT 1 FROM rule_flags f WHERE f.player_id = r.player_id AND f.day <= least(@day::int, p.last_day))))::int AS flagged_by_rules_too,
+       (count(*) FILTER (WHERE r.player_id IS NOT NULL AND EXISTS (
+            SELECT 1 FROM reviews v WHERE v.player_id = r.player_id AND v.as_of_day <= @day::int)))::int AS reviewed
+FROM operators o
+LEFT JOIN players p ON p.operator_code = o.code
+LEFT JOIN daily_ranks r ON r.model_version = @model_version AND r.day = @day AND r.player_id = p.player_id
+GROUP BY o.code
+ORDER BY o.code;
