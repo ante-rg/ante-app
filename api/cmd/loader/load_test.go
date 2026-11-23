@@ -38,7 +38,7 @@ func folder(t *testing.T, version string) (*artifacts.Folder, fakeartifacts.Data
 		t.Fatal(err)
 	}
 	ds := fakeartifacts.Generate(1)
-	if err := fakeartifacts.Write(dir, version, ds); err != nil {
+	if err := fakeartifacts.Write(dir, ds, fakeartifacts.SyntheticCard(version, ds)); err != nil {
 		t.Fatal(err)
 	}
 	f, err := artifacts.Open(dir)

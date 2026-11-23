@@ -63,7 +63,7 @@ type sampleRow struct {
 	Position int32  `parquet:"position"`
 }
 
-type cardMetric struct {
+type CardMetric struct {
 	WindowDays     int      `json:"window_days"`
 	Split          string   `json:"split"`
 	Method         string   `json:"method"`
@@ -71,8 +71,9 @@ type cardMetric struct {
 	MedianLeadDays *float64 `json:"median_lead_days"`
 }
 
-type modelCard struct {
+type Card struct {
 	ModelVersion    string       `json:"model_version"`
+	DatasetVersion  string       `json:"dataset_version,omitempty"`
 	Synthetic       bool         `json:"synthetic"`
 	DefaultDay      int32        `json:"default_day"`
 	DefaultCapacity int          `json:"default_capacity"`
@@ -82,14 +83,14 @@ type modelCard struct {
 	DataProtection  string       `json:"data_protection"`
 	EthicalRisks    string       `json:"ethical_risks"`
 	Limits          []string     `json:"limits"`
-	Metrics         []cardMetric `json:"metrics"`
+	Metrics         []CardMetric `json:"metrics"`
 }
 
-func Write(dir, version string, ds Dataset) error {
+func Write(dir string, ds Dataset, card Card) error {
 	if err := writeAll(dir, ds); err != nil {
 		return err
 	}
-	return writeCard(dir, version, ds)
+	return writeCard(dir, card)
 }
 
 func writeAll(dir string, ds Dataset) error {
@@ -164,7 +165,7 @@ func writeParquet[T any](dir, name string, rows []T) (err error) {
 	return nil
 }
 
-func cardMetrics(ds Dataset) []cardMetric {
+func cardMetrics(ds Dataset) []CardMetric {
 	splits := []string{"all"}
 	seen := map[string]bool{}
 	for _, p := range ds.Players {
@@ -174,21 +175,21 @@ func cardMetrics(ds Dataset) []cardMetric {
 		}
 	}
 	sort.Strings(splits[1:])
-	var out []cardMetric
+	var out []CardMetric
 	for wi, w := range []int{7, 14, 30} {
 		for si, sp := range splits {
 			base := 0.3 + 0.05*float64(wi) + 0.02*float64(si)
 			for mi, method := range []string{"model", "rules"} {
 				lead := 5 + 2*float64(wi) - 2*float64(mi)
-				out = append(out, cardMetric{w, sp, method, base - 0.1*float64(mi), &lead})
+				out = append(out, CardMetric{w, sp, method, base - 0.1*float64(mi), &lead})
 			}
 		}
 	}
 	return out
 }
 
-func writeCard(dir, version string, ds Dataset) error {
-	card := modelCard{
+func SyntheticCard(version string, ds Dataset) Card {
+	return Card{
 		ModelVersion:    version,
 		Synthetic:       true,
 		DefaultDay:      ds.DefaultDay,
@@ -201,6 +202,9 @@ func writeCard(dir, version string, ds Dataset) error {
 		Limits:          []string{"Synthetic data only"},
 		Metrics:         cardMetrics(ds),
 	}
+}
+
+func writeCard(dir string, card Card) error {
 	b, err := json.MarshalIndent(card, "", "  ")
 	if err != nil {
 		return fmt.Errorf("write model_card.json: %w", err)
