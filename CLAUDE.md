@@ -63,9 +63,11 @@ api/            Go module (github.com/ante-rg/ante-app/api)
   cmd/api/        HTTP server, also serves web/dist
   cmd/loader/     loads artifacts/<model_version>/ into Postgres, reads parquet
   cmd/fakeartifacts/ CLI that writes dummy artifacts for development
+  cmd/baseline/   writes baseline artifacts from the TSI-100 export
   cmd/apikey/     CLI that creates or rotates a brand's ingest API key
   internal/artifacts/ opens and validates an artifacts folder
   internal/fakeartifacts/ generator behind cmd/fakeartifacts
+  internal/baseline/ reads the export into players, sessions and activity
   internal/ingestkey/ ingest API key generation and SHA-256 hashing
   internal/config/ environment config
   internal/db/    pgx pool, goose migrations applied on start
@@ -107,6 +109,7 @@ make test         # go test ./..., pytest, vitest
 make lint         # golangci-lint v2.15.0 (go run), ruff check + format check, Biome + tsc --noEmit
 make build        # build the compose images from source
 make artifacts    # write dummy artifacts to artifacts/dummy-v0
+make baseline IN=<export folder>  # write baseline artifacts from the TSI-100 export
 make load MODEL=<version>  # load artifacts/<version> into Postgres (DATABASE_URL overrides the target)
 make apikey OPERATOR=<code>  # create or rotate a brand's ingest key; prints it once
 ```

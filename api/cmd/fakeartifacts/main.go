@@ -53,7 +53,7 @@ func run(args []string, stderr io.Writer) error {
 		return fmt.Errorf("chmod %s: %w", tmp, err)
 	}
 	ds := fakeartifacts.Generate(*seed)
-	if err := fakeartifacts.Write(tmp, filepath.Base(dir), ds); err != nil {
+	if err := fakeartifacts.Write(tmp, ds, fakeartifacts.SyntheticCard(filepath.Base(dir), ds)); err != nil {
 		return err
 	}
 	if err := os.RemoveAll(dir); err != nil {

@@ -64,7 +64,6 @@ func TestGenerate_Invariants(t *testing.T) {
 	checkSessions(t, ds)
 	checkActivity(t, ds)
 	checkScores(t, ds)
-	checkWeightsVary(t, ds)
 	checkScoreValues(t, ds)
 	checkActivityValues(t, ds)
 	checkSampleContent(t, ds)
@@ -197,16 +196,6 @@ func checkScore(t *testing.T, s Score, id string, day int32, dep30 float64) {
 	}
 }
 
-func checkWeightsVary(t *testing.T, ds Dataset) {
-	t.Helper()
-	for _, s := range ds.Scores {
-		if s.Score != nil && s.Reasons[0].Code != "deposits_30d" {
-			return
-		}
-	}
-	t.Error("deposits_30d is always the top reason, weights carry no information")
-}
-
 func checkRuleFlags(t *testing.T, ds Dataset) {
 	t.Helper()
 	dep := depositsByDay(ds)
@@ -336,7 +325,7 @@ type series struct {
 	dep, night, chase []float64
 }
 
-func recompute(ds Dataset) (map[string]series, float64) {
+func recompute(ds Dataset) map[string]series {
 	m := map[string]series{}
 	for _, p := range ds.Players {
 		n := p.LastDay + 1
@@ -347,28 +336,16 @@ func recompute(ds Dataset) (map[string]series, float64) {
 		m[a.PlayerID].night[a.Day] = float64(a.NightSessionsN)
 		m[a.PlayerID].chase[a.Day] = float64(a.ChaseSessionsN)
 	}
-	var maxDep float64
-	for _, p := range ds.Players {
-		for d := int32(0); d <= p.LastDay; d++ {
-			maxDep = math.Max(maxDep, sumWindow(m[p.ID].dep, d, 30))
-		}
-	}
-	return m, maxDep
+	return m
 }
 
-func expectedWeights(dep30, night, chase float64) [3]float64 {
-	v := [3]float64{math.Min(dep30/2000, 1), math.Min(night/7, 1), math.Min(chase/5, 1)}
-	total := v[0] + v[1] + v[2]
-	if total == 0 {
-		return [3]float64{1, 0, 0}
-	}
-	return [3]float64{v[0] / total, v[1] / total, v[2] / total}
-}
+func ruleScore(dep30 float64) float64 { return math.Round(dep30/(dep30+2000)*1e4) / 1e4 }
 
 func checkScoreValues(t *testing.T, ds Dataset) {
 	t.Helper()
-	ser, maxDep := recompute(ds)
+	ser := recompute(ds)
 	codes := [3]string{"deposits_30d", "night_sessions_7d", "chase_sessions_30d"}
+	w := [3]float64{1, 0, 0}
 	var zeroRows int
 	for _, s := range ds.Scores {
 		if s.Score == nil {
@@ -377,13 +354,12 @@ func checkScoreValues(t *testing.T, ds Dataset) {
 		x := ser[s.PlayerID]
 		dep30 := sumWindow(x.dep, s.Day, 30)
 		night, chase := sumWindow(x.night, s.Day, 7), sumWindow(x.chase, s.Day, 30)
-		if want := math.Round(dep30/maxDep*1e4) / 1e4; *s.Score != want {
+		if want := ruleScore(dep30); *s.Score != want {
 			t.Fatalf("%s day %d: score %v, want %v", s.PlayerID, s.Day, *s.Score, want)
 		}
-		w := expectedWeights(dep30, night, chase)
 		for _, r := range s.Reasons {
 			i := slices.Index(codes[:], r.Code)
-			if math.Abs(r.Weight-w[i]) > 0.011 {
+			if r.Weight != w[i] {
 				t.Fatalf("%s day %d: %s weight %v, want ~%v", s.PlayerID, s.Day, r.Code, r.Weight, w[i])
 			}
 			switch r.Code {
@@ -438,7 +414,7 @@ func checkActivityValues(t *testing.T, ds Dataset) {
 
 func checkSampleContent(t *testing.T, ds Dataset) {
 	t.Helper()
-	ser, maxDep := recompute(ds)
+	ser := recompute(ds)
 	type row struct {
 		id string
 		k  float64
@@ -446,7 +422,7 @@ func checkSampleContent(t *testing.T, ds Dataset) {
 	var byScore, byFlags []row
 	for _, p := range ds.Players {
 		eff := min(120, p.LastDay)
-		byScore = append(byScore, row{p.ID, math.Round(sumWindow(ser[p.ID].dep, eff, 30)/maxDep*1e4) / 1e4})
+		byScore = append(byScore, row{p.ID, ruleScore(sumWindow(ser[p.ID].dep, eff, 30))})
 		var n float64
 		for d := int32(0); d <= eff; d++ {
 			if sumWindow(ser[p.ID].dep, d, 30) > 2000 {
@@ -523,25 +499,6 @@ func TestGenerate_RuleFalsePositives(t *testing.T) {
 	}
 }
 
-func TestGenerate_ReasonLeadersVary(t *testing.T) {
-	var night, chase int
-	for _, s := range Generate(1).Scores {
-		if s.Score == nil {
-			continue
-		}
-		switch s.Reasons[0].Code {
-		case "night_sessions_7d":
-			night++
-		case "chase_sessions_30d":
-			chase++
-		}
-	}
-	t.Logf("top reason: night=%d chase=%d", night, chase)
-	if night == 0 && chase == 0 {
-		t.Error("neither night nor chase ever leads")
-	}
-}
-
 func TestReasons_TextForms(t *testing.T) {
 	rs := reasons(2345.4, 1, 1)
 	want := map[string]string{
@@ -574,5 +531,110 @@ func TestGenerate_MoneyHasTwoDecimals(t *testing.T) {
 		check(a.PlayerID+" activity deposits_eur", a.DepositsEUR)
 		check(a.PlayerID+" activity net_result_eur", a.NetResultEUR)
 		check(a.PlayerID+" activity end_balance_eur", a.EndBalanceEUR)
+	}
+}
+
+func TestIsChase(t *testing.T) {
+	for _, c := range []struct {
+		dur, dep int32
+		net      float64
+		want     bool
+	}{{7200, 3, -0.01, true}, {7199, 3, -1, false}, {7200, 2, -1, false}, {7200, 3, 0, false}} {
+		if got := IsChase(c.dur, c.dep, c.net); got != c.want {
+			t.Errorf("IsChase(%d,%d,%v) = %v, want %v", c.dur, c.dep, c.net, got, c.want)
+		}
+	}
+}
+
+func TestDerive_NoDeposits(t *testing.T) {
+	players := []Player{{ID: "A", Operator: "P1", LastDay: 10}, {ID: "B", Operator: "P1", LastDay: 10}}
+	var sess []Session
+	var act []Activity
+	for _, p := range players {
+		for d := int32(0); d <= 10; d++ {
+			act = append(act, Activity{PlayerID: p.ID, Day: d, SessionsN: 1})
+		}
+	}
+	ds := Derive(players, sess, act, 10, 1)
+	if len(ds.RuleFlags) != 0 {
+		t.Fatalf("rule flags = %d, want 0", len(ds.RuleFlags))
+	}
+	for _, s := range ds.Scores {
+		switch {
+		case s.Day < 7 && s.Score != nil:
+			t.Fatalf("%s day %d scored, want nil", s.PlayerID, s.Day)
+		case s.Day >= 7 && (s.Score == nil || *s.Score != 0 || math.IsNaN(*s.Score)):
+			t.Fatalf("%s day %d score = %v, want 0", s.PlayerID, s.Day, s.Score)
+		}
+	}
+}
+
+func TestDerive_SampleUsesGivenDefaultDay(t *testing.T) {
+	const day = 30
+	ds := Generate(1)
+	d := Derive(ds.Players, ds.Sessions, ds.Activity, day, 1)
+	scoreAt := map[string]map[int32]*float64{}
+	for _, s := range d.Scores {
+		if scoreAt[s.PlayerID] == nil {
+			scoreAt[s.PlayerID] = map[int32]*float64{}
+		}
+		scoreAt[s.PlayerID][s.Day] = s.Score
+	}
+	want := topN(d.Players, func(p Player) float64 {
+		if s := scoreAt[p.ID][min(int32(day), p.LastDay)]; s != nil {
+			return *s
+		}
+		return -1
+	}, 0)
+	for _, r := range d.Sample {
+		if (r.Source == "model" || r.Source == "both") && !slices.Contains(want, r.PlayerID) {
+			t.Errorf("%s in model list but not in top 10 at day %d", r.PlayerID, day)
+		}
+	}
+}
+
+func TestReasons_DepositsCarryWeight(t *testing.T) {
+	for _, c := range []struct {
+		dep          float64
+		night, chase int
+	}{{0, 0, 0}, {640, 7, 5}, {5000, 0, 3}} {
+		rs := reasons(c.dep, c.night, c.chase)
+		got := []string{rs[0].Code, rs[1].Code, rs[2].Code}
+		if !slices.Equal(got, []string{"deposits_30d", "night_sessions_7d", "chase_sessions_30d"}) ||
+			rs[0].Weight != 1 || rs[1].Weight != 0 || rs[2].Weight != 0 {
+			t.Errorf("reasons(%v,%d,%d) = %+v, want deposits 1 then night 0, chase 0", c.dep, c.night, c.chase, rs)
+		}
+	}
+}
+
+func TestScore_AsOfOnly(t *testing.T) {
+	mk := func(extra []Activity) Dataset {
+		players := []Player{{ID: "A", Operator: "P1", LastDay: 800}, {ID: "B", Operator: "P1", LastDay: 800}}
+		var act []Activity
+		for _, p := range players {
+			for d := int32(0); d <= 800; d++ {
+				a := Activity{PlayerID: p.ID, Day: d, SessionsN: 1}
+				if p.ID == "A" && d >= 40 && d <= 50 {
+					a.DepositsEUR = 100
+				}
+				act = append(act, a)
+			}
+		}
+		for _, e := range extra {
+			act[int(e.Day)+801] = e
+		}
+		return Derive(players, nil, act, 120, 1)
+	}
+	base := mk(nil)
+	later := mk([]Activity{{PlayerID: "B", Day: 700, SessionsN: 1, DepositsEUR: 90000}})
+	for i, s := range base.Scores {
+		if s.PlayerID == "A" && s.Day == 50 {
+			if want := ruleScore(1100); s.Score == nil || *s.Score != want {
+				t.Fatalf("A day 50 score %v, want %v", s.Score, want)
+			}
+		}
+		if s.Day < 700 && !reflect.DeepEqual(s, later.Scores[i]) {
+			t.Fatalf("%s day %d changed after a later deposit: %+v vs %+v", s.PlayerID, s.Day, s, later.Scores[i])
+		}
 	}
 }

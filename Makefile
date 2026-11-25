@@ -5,7 +5,7 @@ DATABASE_URL ?= postgres://postgres:$(POSTGRES_PASSWORD)@localhost:$(POSTGRES_PO
 COMPOSE := docker compose -f deploy/docker-compose.yml -f deploy/local.yml
 LINT_GO := go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0
 
-.PHONY: dev up gen lint test build artifacts load apikey
+.PHONY: dev up gen lint test build artifacts load apikey baseline
 
 gen:
 	cd api && go tool oapi-codegen -config oapi-codegen.yaml ../openapi.yaml
@@ -37,6 +37,10 @@ dev:
 
 artifacts:
 	cd api && go run ./cmd/fakeartifacts
+
+baseline:
+	@test -n "$(IN)" || { echo "usage: make baseline IN=<export folder>"; exit 2; }
+	cd api && go run ./cmd/baseline -in '$(abspath $(IN))'
 
 load:
 	@test -n "$(MODEL)" || { echo "usage: make load MODEL=<version> [DATABASE_URL=...]"; exit 2; }

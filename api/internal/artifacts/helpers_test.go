@@ -18,7 +18,8 @@ func dummy(t *testing.T) string {
 	if err := os.Mkdir(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := fakeartifacts.Write(dir, "dummy-v0", fakeartifacts.Generate(1)); err != nil {
+	ds := fakeartifacts.Generate(1)
+	if err := fakeartifacts.Write(dir, ds, fakeartifacts.SyntheticCard("dummy-v0", ds)); err != nil {
 		t.Fatal(err)
 	}
 	return dir

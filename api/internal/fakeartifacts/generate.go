@@ -101,26 +101,38 @@ type dense struct {
 func Generate(seed int64) Dataset {
 	rng := rand.New(rand.NewPCG(uint64(seed), uint64(seed)))
 	rng2 := rand.New(rand.NewPCG(uint64(seed), uint64(seed)+1))
-	ds := Dataset{Players: genPlayers(rng), DefaultDay: defaultDay}
-	burst := pickBursts(rng2, ds.Players)
-	series := make([]dense, len(ds.Players))
-	maxDep30 := 0.0
-	for i := range ds.Players {
-		p := &ds.Players[i]
-		sess, act := genHistory(rng, rng2, p, burst[i])
-		ds.Sessions = append(ds.Sessions, sess...)
-		ds.Activity = append(ds.Activity, act...)
-		series[i] = buildDense(p, act)
-		for _, v := range series[i].dep30 {
-			maxDep30 = max(maxDep30, v)
-		}
+	players := genPlayers(rng)
+	burst := pickBursts(rng2, players)
+	var sessions []Session
+	var act []Activity
+	for i := range players {
+		sess, a := genHistory(rng, rng2, &players[i], burst[i])
+		sessions = append(sessions, sess...)
+		act = append(act, a...)
 	}
-	for i, p := range ds.Players {
-		ds.Scores = append(ds.Scores, scoresFor(p, series[i], maxDep30)...)
+	return Derive(players, sessions, act, defaultDay, seed)
+}
+
+func Derive(players []Player, sessions []Session, act []Activity, defaultDay int32, seed int64) Dataset {
+	ds := Dataset{Players: players, Sessions: sessions, Activity: act, DefaultDay: defaultDay}
+	byPlayer := map[string][]Activity{}
+	for _, a := range act {
+		byPlayer[a.PlayerID] = append(byPlayer[a.PlayerID], a)
+	}
+	series := make([]dense, len(players))
+	for i := range players {
+		series[i] = buildDense(&players[i], byPlayer[players[i].ID])
+	}
+	for i, p := range players {
+		ds.Scores = append(ds.Scores, scoresFor(p, series[i])...)
 		ds.RuleFlags = append(ds.RuleFlags, flagsFor(p, series[i])...)
 	}
-	ds.Sample = buildSample(rng, ds)
+	ds.Sample = buildSample(rand.New(rand.NewPCG(uint64(seed), uint64(seed)+2)), ds)
 	return ds
+}
+
+func IsChase(durationS, depositsN int32, netResultEUR float64) bool {
+	return durationS >= chaseSeconds && depositsN >= chaseDeposits && netResultEUR < 0
 }
 
 func genPlayers(rng *rand.Rand) []Player {
@@ -238,7 +250,7 @@ func genSession(rng *rand.Rand, p *Player, day int32, late bool, ramp, growth fl
 	default:
 		s.NetResultEUR = round2(-30 + 55*rng.Float64())
 	}
-	s.IsChase = s.DurationS >= chaseSeconds && s.DepositsN >= chaseDeposits && s.NetResultEUR < 0
+	s.IsChase = IsChase(s.DurationS, s.DepositsN, s.NetResultEUR)
 	return s
 }
 
@@ -286,12 +298,12 @@ func sumI(x []int, day, w int) int {
 	return s
 }
 
-func scoresFor(p Player, d dense, maxDep30 float64) []Score {
+func scoresFor(p Player, d dense) []Score {
 	out := make([]Score, 0, len(d.dep))
 	for day := range d.dep {
 		s := Score{PlayerID: p.ID, Day: int32(day)}
 		if day >= minScoreDay {
-			v := math.Round(d.dep30[day]/maxDep30*1e4) / 1e4
+			v := math.Round(d.dep30[day]/(d.dep30[day]+ruleThreshold)*1e4) / 1e4
 			s.Score = &v
 			s.Reasons = reasons(d.dep30[day], sumI(d.night, day, 7), sumI(d.chase, day, 30))
 		}
@@ -306,33 +318,7 @@ func reasons(dep30 float64, night, chase int) []Reason {
 		{Code: "night_sessions_7d", Text: fmt.Sprintf("%d %s at night in the last 7 days.", night, plural(night, "session"))},
 		{Code: "chase_sessions_30d", Text: fmt.Sprintf("%d loss-chasing %s in the last 30 days.", chase, plural(chase, "session"))},
 	}
-	v := [3]float64{min(dep30/ruleThreshold, 1), min(float64(night)/7, 1), min(float64(chase)/5, 1)}
-	total := v[0] + v[1] + v[2]
-	if total == 0 {
-		v, total = [3]float64{1, 0, 0}, 1
-	}
-	big, rest := 0, 0.0
-	for i := range v {
-		rs[i].Weight = round2(v[i] / total)
-		if v[i] > v[big] {
-			big = i
-		}
-	}
-	for i := range rs {
-		if i != big {
-			rest += rs[i].Weight
-		}
-	}
-	rs[big].Weight = round2(1 - rest)
-	slices.SortStableFunc(rs, func(a, b Reason) int {
-		switch {
-		case a.Weight > b.Weight:
-			return -1
-		case a.Weight < b.Weight:
-			return 1
-		}
-		return 0
-	})
+	rs[0].Weight = 1
 	return rs
 }
 
@@ -347,7 +333,7 @@ func flagsFor(p Player, d dense) []RuleFlag {
 }
 
 func buildSample(rng *rand.Rand, ds Dataset) []SampleRow {
-	eff := func(p Player) int32 { return min(defaultDay, p.LastDay) }
+	eff := func(p Player) int32 { return min(ds.DefaultDay, p.LastDay) }
 	scoreAt := map[string][]*float64{}
 	for _, s := range ds.Scores {
 		scoreAt[s.PlayerID] = append(scoreAt[s.PlayerID], s.Score)
@@ -358,7 +344,7 @@ func buildSample(rng *rand.Rand, ds Dataset) []SampleRow {
 	}
 	flagDays := map[string]int{}
 	for _, f := range ds.RuleFlags {
-		if f.Day <= min(defaultDay, lastDay[f.PlayerID]) {
+		if f.Day <= min(ds.DefaultDay, lastDay[f.PlayerID]) {
 			flagDays[f.PlayerID]++
 		}
 	}
