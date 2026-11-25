@@ -164,6 +164,7 @@ export interface paths {
          * Submit a batch of events for one player and get the current score
          * @description Idempotent per (operator, player_id, event_order): repeated events are counted as duplicates and ignored.
          *     The band is derived from the score cut-offs of the latest replay ranking.
+         *     The brand comes from the API key; a key can write only its own brand's players. Until live scoring lands the endpoint stores events and answers 503 with score null.
          */
         post: operations["ingestEvents"];
         delete?: never;
@@ -406,7 +407,7 @@ export interface components {
                 recall_top20: number;
             }[];
         };
-        /** @description Mirrors the columns of events.parquet. Unknown fields are kept in the stored payload. */
+        /** @description Mirrors the columns of events.parquet. Unknown fields are kept in the stored payload; integers in them above 2^53 lose precision. */
         Event: {
             event_order: number;
             /** @enum {string} */
@@ -418,9 +419,13 @@ export interface components {
             product?: "SLOTS" | "LIVE" | "SPORTSBOOK" | null;
             provider_code?: string | null;
             game_code?: string | null;
+            /** Format: double */
             stake_eur?: number | null;
+            /** Format: double */
             returned_eur?: number | null;
+            /** Format: double */
             total_balance_eur?: number | null;
+            /** Format: double */
             payment_amount_eur?: number | null;
             payment_category?: string | null;
         } & {

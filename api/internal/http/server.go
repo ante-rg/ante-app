@@ -9,6 +9,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/ante-rg/ante-app/api/internal/gen"
 	"github.com/ante-rg/ante-app/api/internal/store"
@@ -23,6 +24,7 @@ type Pinger interface {
 type DB interface {
 	Pinger
 	store.DBTX
+	Begin(ctx context.Context) (pgx.Tx, error)
 }
 
 type Server struct {
@@ -81,9 +83,5 @@ func (s *Server) ListOperators(context.Context, gen.ListOperatorsRequestObject) 
 }
 
 func (s *Server) GetModelCard(context.Context, gen.GetModelCardRequestObject) (gen.GetModelCardResponseObject, error) {
-	return nil, errNotImplemented
-}
-
-func (s *Server) IngestEvents(context.Context, gen.IngestEventsRequestObject) (gen.IngestEventsResponseObject, error) {
 	return nil, errNotImplemented
 }

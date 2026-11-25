@@ -219,6 +219,7 @@ paths:
       description: |
         Idempotent per (operator, player_id, event_order): repeated events are counted as duplicates and ignored.
         The band is derived from the score cut-offs of the latest replay ranking.
+        The brand comes from the API key; a key can write only its own brand's players. Until live scoring lands the endpoint stores events and answers 503 with score null.
       operationId: ingestEvents
       security:
         - operatorKey: []
@@ -559,23 +560,23 @@ components:
     Event:
       type: object
       required: [event_order, event_type, seconds_from_first_event]
-      description: Mirrors the columns of events.parquet. Unknown fields are kept in the stored payload.
+      description: Mirrors the columns of events.parquet. Unknown fields are kept in the stored payload; integers in them above 2^53 lose precision.
       additionalProperties: true
       properties:
         event_order: { type: integer, minimum: 1 }
         event_type:
           type: string
           enum: [BET_PLACED, BET_RESULT, GAME_STATE, DEPOSIT, WITHDRAWAL_REQUEST, BONUS_ACTIVATION, BONUS_CANCEL, FREE_SPIN_PACKAGE]
-        seconds_from_first_event: { type: integer, minimum: 0 }
+        seconds_from_first_event: { type: integer, minimum: 0, x-go-type: "*int" }
         local_hour: { type: integer, minimum: 0, maximum: 23 }
         weekday: { type: integer, minimum: 1, maximum: 7 }
         product: { type: [string, "null"], enum: [SLOTS, LIVE, SPORTSBOOK, null] }
         provider_code: { type: [string, "null"] }
         game_code: { type: [string, "null"] }
-        stake_eur: { type: [number, "null"] }
-        returned_eur: { type: [number, "null"] }
-        total_balance_eur: { type: [number, "null"] }
-        payment_amount_eur: { type: [number, "null"] }
+        stake_eur: { type: [number, "null"], format: double }
+        returned_eur: { type: [number, "null"], format: double }
+        total_balance_eur: { type: [number, "null"], format: double }
+        payment_amount_eur: { type: [number, "null"], format: double }
         payment_category: { type: [string, "null"] }
 
     EventBatch:

@@ -396,20 +396,20 @@ type Error struct {
 	Message string `json:"message"`
 }
 
-// Event Mirrors the columns of events.parquet. Unknown fields are kept in the stored payload.
+// Event Mirrors the columns of events.parquet. Unknown fields are kept in the stored payload; integers in them above 2^53 lose precision.
 type Event struct {
 	EventOrder            int                    `json:"event_order"`
 	EventType             EventEventType         `json:"event_type"`
 	GameCode              *string                `json:"game_code,omitempty"`
 	LocalHour             *int                   `json:"local_hour,omitempty"`
-	PaymentAmountEur      *float32               `json:"payment_amount_eur,omitempty"`
+	PaymentAmountEur      *float64               `json:"payment_amount_eur,omitempty"`
 	PaymentCategory       *string                `json:"payment_category,omitempty"`
 	Product               *EventProduct          `json:"product,omitempty"`
 	ProviderCode          *string                `json:"provider_code,omitempty"`
-	ReturnedEur           *float32               `json:"returned_eur,omitempty"`
-	SecondsFromFirstEvent int                    `json:"seconds_from_first_event"`
-	StakeEur              *float32               `json:"stake_eur,omitempty"`
-	TotalBalanceEur       *float32               `json:"total_balance_eur,omitempty"`
+	ReturnedEur           *float64               `json:"returned_eur,omitempty"`
+	SecondsFromFirstEvent *int                   `json:"seconds_from_first_event"`
+	StakeEur              *float64               `json:"stake_eur,omitempty"`
+	TotalBalanceEur       *float64               `json:"total_balance_eur,omitempty"`
 	Weekday               *int                   `json:"weekday,omitempty"`
 	AdditionalProperties  map[string]interface{} `json:"-"`
 }
