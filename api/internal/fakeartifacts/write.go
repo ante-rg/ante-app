@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 
 	"github.com/parquet-go/parquet-go"
 )
@@ -62,27 +63,33 @@ type sampleRow struct {
 	Position int32  `parquet:"position"`
 }
 
-type cardSections struct {
-	Summary     string `json:"summary"`
-	IntendedUse string `json:"intended_use"`
-	Limitations string `json:"limitations"`
+type cardMetric struct {
+	WindowDays     int      `json:"window_days"`
+	Split          string   `json:"split"`
+	Method         string   `json:"method"`
+	EarlyRecall    float64  `json:"early_recall"`
+	MedianLeadDays *float64 `json:"median_lead_days"`
 }
 
 type modelCard struct {
-	ModelVersion    string         `json:"model_version"`
-	Synthetic       bool           `json:"synthetic"`
-	DefaultDay      int32          `json:"default_day"`
-	DefaultCapacity int            `json:"default_capacity"`
-	Sections        cardSections   `json:"sections"`
-	Metrics         map[string]any `json:"metrics"`
-	KnownLimits     []string       `json:"known_limits"`
+	ModelVersion    string       `json:"model_version"`
+	Synthetic       bool         `json:"synthetic"`
+	DefaultDay      int32        `json:"default_day"`
+	DefaultCapacity int          `json:"default_capacity"`
+	Summary         string       `json:"summary"`
+	LabelDefinition string       `json:"label_definition"`
+	IntendedUse     string       `json:"intended_use"`
+	DataProtection  string       `json:"data_protection"`
+	EthicalRisks    string       `json:"ethical_risks"`
+	Limits          []string     `json:"limits"`
+	Metrics         []cardMetric `json:"metrics"`
 }
 
 func Write(dir, version string, ds Dataset) error {
 	if err := writeAll(dir, ds); err != nil {
 		return err
 	}
-	return writeCard(dir, version, ds.DefaultDay)
+	return writeCard(dir, version, ds)
 }
 
 func writeAll(dir string, ds Dataset) error {
@@ -157,19 +164,42 @@ func writeParquet[T any](dir, name string, rows []T) (err error) {
 	return nil
 }
 
-func writeCard(dir, version string, defaultDay int32) error {
+func cardMetrics(ds Dataset) []cardMetric {
+	splits := []string{"all"}
+	seen := map[string]bool{}
+	for _, p := range ds.Players {
+		if !seen[p.Operator] {
+			seen[p.Operator] = true
+			splits = append(splits, p.Operator)
+		}
+	}
+	sort.Strings(splits[1:])
+	var out []cardMetric
+	for wi, w := range []int{7, 14, 30} {
+		for si, sp := range splits {
+			base := 0.3 + 0.05*float64(wi) + 0.02*float64(si)
+			for mi, method := range []string{"model", "rules"} {
+				lead := 5 + 2*float64(wi) - 2*float64(mi)
+				out = append(out, cardMetric{w, sp, method, base - 0.1*float64(mi), &lead})
+			}
+		}
+	}
+	return out
+}
+
+func writeCard(dir, version string, ds Dataset) error {
 	card := modelCard{
 		ModelVersion:    version,
 		Synthetic:       true,
-		DefaultDay:      defaultDay,
+		DefaultDay:      ds.DefaultDay,
 		DefaultCapacity: sampleListSize,
-		Sections: cardSections{
-			Summary:     "Synthetic data for development. Not a model; scores are normalised 30-day deposits.",
-			IntendedUse: "Building and demonstrating the app before the data science team publishes artifacts.",
-			Limitations: "No real players. Numbers carry no meaning about gambling harm.",
-		},
-		Metrics:     map[string]any{},
-		KnownLimits: []string{"Synthetic data only"},
+		Summary:         "Synthetic data for development. Not a model; scores are normalised 30-day deposits. A score is a signal for human review, not a diagnosis.",
+		LabelDefinition: "Synthetic placeholder. No real label exists; chase sessions are generated at random.",
+		IntendedUse:     "Building and demonstrating the app before the data science team publishes artifacts.",
+		DataProtection:  "No real players. All identifiers and events are synthetic.",
+		EthicalRisks:    "Numbers carry no meaning about gambling harm. Do not read a score as a diagnosis.",
+		Limits:          []string{"Synthetic data only"},
+		Metrics:         cardMetrics(ds),
 	}
 	b, err := json.MarshalIndent(card, "", "  ")
 	if err != nil {

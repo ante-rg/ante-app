@@ -386,26 +386,34 @@ export interface components {
         };
         ModelCard: {
             model_version: string;
+            /** @description True when the artifacts are dummy data */
+            synthetic?: boolean;
             /** Format: date-time */
             trained_at?: string;
             /** @description Plain-language description of what the score means */
             summary: string;
-            label_definition?: string;
+            label_definition: string;
+            intended_use: string;
+            data_protection: string;
+            ethical_risks: string;
             limits: string[];
-            /** @description One row per observation window and evaluation split */
-            metrics: {
-                /** @enum {integer} */
-                window_days: 7 | 14 | 30;
-                /**
-                 * @description 'all' or a held-out operator code
-                 * @example P3
-                 */
-                split: string;
-                /** @enum {string} */
-                method: "model" | "rules";
-                precision_top20: number;
-                recall_top20: number;
-            }[];
+            /** @description Review capacity the evaluation numbers are quoted at */
+            default_capacity: number;
+            /** @description One row per observation window, evaluation split and method */
+            metrics: components["schemas"]["ModelMetric"][];
+        };
+        ModelMetric: {
+            /** @enum {integer} */
+            window_days: 7 | 14 | 30;
+            /**
+             * @description 'all' or a held-out operator code
+             * @example P3
+             */
+            split: string;
+            /** @enum {string} */
+            method: "model" | "rules";
+            early_recall: number;
+            median_lead_days: number | null;
         };
         /** @description Mirrors the columns of events.parquet. Unknown fields are kept in the stored payload; integers in them above 2^53 lose precision. */
         Event: {
@@ -769,6 +777,7 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
         };
     };
     ingestEvents: {
