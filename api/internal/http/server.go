@@ -78,10 +78,6 @@ func (s *Server) ListPlayerSessions(context.Context, gen.ListPlayerSessionsReque
 	return nil, errNotImplemented
 }
 
-func (s *Server) ListOperators(context.Context, gen.ListOperatorsRequestObject) (gen.ListOperatorsResponseObject, error) {
-	return nil, errNotImplemented
-}
-
 func (s *Server) GetModelCard(context.Context, gen.GetModelCardRequestObject) (gen.GetModelCardResponseObject, error) {
 	return nil, errNotImplemented
 }

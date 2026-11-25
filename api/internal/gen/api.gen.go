@@ -1824,6 +1824,20 @@ func (response ListOperators200JSONResponse) VisitListOperatorsResponse(w http.R
 	return err
 }
 
+type ListOperators400JSONResponse struct{ InvalidJSONResponse }
+
+func (response ListOperators400JSONResponse) VisitListOperatorsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListOperators401JSONResponse struct{ UnauthorizedJSONResponse }
 
 func (response ListOperators401JSONResponse) VisitListOperatorsResponse(w http.ResponseWriter) error {
@@ -1834,6 +1848,20 @@ func (response ListOperators401JSONResponse) VisitListOperatorsResponse(w http.R
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListOperators404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListOperators404JSONResponse) VisitListOperatorsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
 	_, err := buf.WriteTo(w)
 	return err
 }

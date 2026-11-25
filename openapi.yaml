@@ -197,7 +197,9 @@ paths:
                   items:
                     type: array
                     items: { $ref: "#/components/schemas/OperatorSummary" }
+        "400": { $ref: "#/components/responses/Invalid" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   /api/v1/model:
     get:
