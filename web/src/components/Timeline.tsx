@@ -10,7 +10,7 @@ export type TimelineProps = {
   historyEndedOnDay: number | null;
   firstHighDay: number | null;
   firstRuleDay: number | null;
-  scores: TimelineScore[];
+  scores?: TimelineScore[];
   days: TimelineDay[];
 };
 
@@ -36,23 +36,27 @@ function range(to: number, step: number) {
   return out;
 }
 
-export function TimelineLegend() {
+export function TimelineLegend({ blind }: { blind?: boolean }) {
   return (
     <div className="tl-legend">
-      <span>
-        <svg width="18" height="10" aria-hidden="true">
-          <line x1="0" y1="5" x2="18" y2="5" stroke="currentColor" strokeWidth="2" />
-        </svg>
-        Score
-      </span>
-      <span>
-        <i className="sw high" />
-        High band
-      </span>
-      <span>
-        <i className="sw elevated" />
-        Elevated band
-      </span>
+      {!blind && (
+        <>
+          <span>
+            <svg width="18" height="10" aria-hidden="true">
+              <line x1="0" y1="5" x2="18" y2="5" stroke="currentColor" strokeWidth="2" />
+            </svg>
+            Score
+          </span>
+          <span>
+            <i className="sw high" />
+            High band
+          </span>
+          <span>
+            <i className="sw elevated" />
+            Elevated band
+          </span>
+        </>
+      )}
       <span>
         <i className="sw dep" />
         Deposits per day
@@ -87,56 +91,62 @@ export function Timeline({
   const cutAnchor = day === 0 ? 'start' : cutX >= END_ANCHOR_X ? 'end' : 'middle';
   const dropRule =
     firstHighDay !== null && firstRuleDay !== null && Math.abs(x(firstRuleDay) - x(firstHighDay)) < LABEL_DROP_GAP;
-  const desc =
-    `Score and deposits per day for player ${playerId} from day 0 to day ${day}. ` +
-    `${firstHighDay === null ? 'Not in the high band.' : `High band from day ${firstHighDay}.`} ` +
-    `${firstRuleDay === null ? 'No fixed rule.' : `First fixed rule on day ${firstRuleDay}.`}`;
+  const desc = scores
+    ? `Score and deposits per day for player ${playerId} from day 0 to day ${day}. ` +
+      `${firstHighDay === null ? 'Not in the high band.' : `High band from day ${firstHighDay}.`} ` +
+      `${firstRuleDay === null ? 'No fixed rule.' : `First fixed rule on day ${firstRuleDay}.`}`
+    : `Deposits per day for player ${playerId} from day 0 to day ${day}.`;
 
+  const top = scores ? S_TOP : D_TOP - 40;
   return (
     <svg
       className="timeline"
-      viewBox="0 0 1000 330"
+      viewBox={scores ? '0 0 1000 330' : `0 ${top - 30} 1000 ${330 - top + 30}`}
       role="img"
       aria-labelledby={`${id}-t`}
       aria-describedby={`${id}-d`}
     >
       <title id={`${id}-t`}>Activity timeline</title>
       <desc id={`${id}-d`}>{desc}</desc>
-      <text className="lbl" x={X0 - 8} y={20} textAnchor="end">
-        Score
-      </text>
-      {[0, 0.5, 1].map((t) => (
-        <text key={t} x={X0 - 8} y={ys(t) + 4} textAnchor="end">
-          {t === 0 ? '0' : t.toFixed(1)}
-        </text>
-      ))}
-      <line className="axis" x1={X0} y1={S_BOT} x2={X1} y2={S_BOT} />
-      <LinePath
-        className="score-line"
-        data={scores}
-        defined={(s) => s.score !== null}
-        x={(s) => x(s.day)}
-        y={(s) => ys(s.score ?? 0)}
-      />
-      {scores.map((s, i) =>
-        s.score !== null && scores[i - 1]?.score == null && scores[i + 1]?.score == null ? (
-          <circle key={s.day} className="score-dot" r={3} cx={x(s.day)} cy={ys(s.score)} fill="currentColor" />
-        ) : null,
-      )}
-      <text x={X0 - 8} y={(B_TOP + B_BOT) / 2 + 4} textAnchor="end">
-        Band
-      </text>
-      {scores.map((s) =>
-        s.band === 'high' || s.band === 'elevated' ? (
-          <rect
-            key={s.day}
-            className={`band-cell ${s.band}`}
-            x={x(s.day - 0.5)}
-            width={step}
-            y={B_TOP}
-            height={B_BOT - B_TOP}
+      {scores && (
+        <>
+          <text className="lbl" x={X0 - 8} y={20} textAnchor="end">
+            Score
+          </text>
+          {[0, 0.5, 1].map((t) => (
+            <text key={t} x={X0 - 8} y={ys(t) + 4} textAnchor="end">
+              {t === 0 ? '0' : t.toFixed(1)}
+            </text>
+          ))}
+          <line className="axis" x1={X0} y1={S_BOT} x2={X1} y2={S_BOT} />
+          <LinePath
+            className="score-line"
+            data={scores}
+            defined={(s) => s.score !== null}
+            x={(s) => x(s.day)}
+            y={(s) => ys(s.score ?? 0)}
           />
-        ) : null,
+          {scores.map((s, i) =>
+            s.score !== null && scores[i - 1]?.score == null && scores[i + 1]?.score == null ? (
+              <circle key={s.day} className="score-dot" r={3} cx={x(s.day)} cy={ys(s.score)} fill="currentColor" />
+            ) : null,
+          )}
+          <text x={X0 - 8} y={(B_TOP + B_BOT) / 2 + 4} textAnchor="end">
+            Band
+          </text>
+          {scores.map((s) =>
+            s.band === 'high' || s.band === 'elevated' ? (
+              <rect
+                key={s.day}
+                className={`band-cell ${s.band}`}
+                x={x(s.day - 0.5)}
+                width={step}
+                y={B_TOP}
+                height={B_BOT - B_TOP}
+              />
+            ) : null,
+          )}
+        </>
       )}
       <text className="lbl" x={X0} y={D_TOP - 14}>
         Deposits per day
@@ -192,8 +202,8 @@ export function Timeline({
         </g>
       )}
       <g className="cutoff">
-        <line x1={cutX} y1={S_TOP - 14} x2={cutX} y2={D_BOT} />
-        <text x={cutX} y={S_TOP - 20} textAnchor={cutAnchor}>
+        <line x1={cutX} y1={top - 14} x2={cutX} y2={D_BOT} />
+        <text x={cutX} y={top - 20} textAnchor={cutAnchor}>
           {historyEndedOnDay === null ? `Day ${day}` : `History ends on day ${historyEndedOnDay}`}
         </text>
       </g>

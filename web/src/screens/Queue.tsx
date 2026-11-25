@@ -61,11 +61,13 @@ function Population({ counts, day }: { counts: Queue['counts']; day: number }) {
   );
 }
 
-function Row({ item, day }: { item: QueueItem; day: number }) {
+function Row({ item, day, blind, blindCase }: { item: QueueItem; day: number; blind: boolean; blindCase?: number }) {
   const navigate = useNavigate();
   const { search } = useLocation();
   const open = () =>
-    navigate(`/players/${encodeURIComponent(item.player_id)}?day=${day}`, { state: { queueSearch: search } });
+    navigate(`/players/${encodeURIComponent(item.player_id)}?day=${day}${blind ? '&mode=blind' : ''}`, {
+      state: { queueSearch: search },
+    });
   const onKeyDown = (e: KeyboardEvent<HTMLTableRowElement>) => {
     if (e.metaKey || e.ctrlKey || e.altKey) return;
     if (e.key === 'Enter') return open();
@@ -80,31 +82,49 @@ function Row({ item, day }: { item: QueueItem; day: number }) {
     to.focus();
   };
   const band = item.band ?? 'insufficient_data';
+  const dayCell = (
+    <td className="r">
+      {item.effective_day}
+      {item.history_ended_on_day != null && (
+        <span className="ended">History ends on day {item.history_ended_on_day}</span>
+      )}
+    </td>
+  );
+  const reviewCell = (
+    <td>
+      {item.last_outcome ? (
+        <span className="status-ok">{outcomeLabel(item.last_outcome, true)}</span>
+      ) : (
+        <span className="status-pending">To review</span>
+      )}
+    </td>
+  );
   return (
     <tr className="go" tabIndex={0} aria-label={`Open case ${item.player_id}`} onClick={open} onKeyDown={onKeyDown}>
-      <td className="r">{item.rank ?? ''}</td>
-      <td className="pid">{item.player_id}</td>
-      <td>{item.operator_code}</td>
-      <td>
-        <BandChip band={band} />
-      </td>
-      <td className="r">{item.score == null ? '' : item.score.toFixed(2)}</td>
-      <td>{item.score_trend_30d && <Sparkline values={item.score_trend_30d} />}</td>
-      <td className="reason">{item.main_reason}</td>
-      <td>{item.flagged_by_rules ? 'Also flagged' : <span className="soft">Not flagged</span>}</td>
-      <td className="r">
-        {item.effective_day}
-        {item.history_ended_on_day != null && (
-          <span className="ended">History ends on day {item.history_ended_on_day}</span>
-        )}
-      </td>
-      <td>
-        {item.last_outcome ? (
-          <span className="status-ok">{outcomeLabel(item.last_outcome, true)}</span>
-        ) : (
-          <span className="status-pending">To review</span>
-        )}
-      </td>
+      {blindCase ? (
+        <>
+          <td>{blindCase}</td>
+          <td className="pid">{item.player_id}</td>
+          <td>{item.operator_code}</td>
+          {dayCell}
+          {reviewCell}
+        </>
+      ) : (
+        <>
+          <td className="r">{item.rank ?? ''}</td>
+          <td className="pid">{item.player_id}</td>
+          <td>{item.operator_code}</td>
+          <td>
+            <BandChip band={band} />
+          </td>
+          <td className="r">{item.score == null ? '' : item.score.toFixed(2)}</td>
+          <td>{item.score_trend_30d && <Sparkline values={item.score_trend_30d} />}</td>
+          <td className="reason">{item.main_reason}</td>
+          <td>{item.flagged_by_rules ? 'Also flagged' : <span className="soft">Not flagged</span>}</td>
+          {dayCell}
+          {reviewCell}
+        </>
+      )}
     </tr>
   );
 }
@@ -119,6 +139,7 @@ export function QueueScreen() {
   const rawReview = params.get('review');
   const reviewStatus = rawReview === 'pending' || rawReview === 'reviewed' ? rawReview : undefined;
   const capacity = parseCapacity(params.get('capacity') ?? '') ?? undefined;
+  const blind = params.get('mode') === 'blind';
   const [draft, setDraft] = useState<string | null>(null);
 
   const setParam = (key: string, value: string | null) =>
@@ -133,9 +154,16 @@ export function QueueScreen() {
     );
 
   const { data, isError, isPlaceholderData } = useQuery({
-    queryKey: ['queue', day, operator, band, capacity, reviewStatus],
-    queryFn: ({ signal }) => getQueue({ asOfDay: day, operator, band, capacity, reviewStatus }, signal),
-    placeholderData: (prev, prevQuery) => (prevQuery && (prevQuery.queryKey[1] as number) <= day ? prev : undefined),
+    queryKey: ['queue', day, operator, blind ? undefined : band, blind ? undefined : capacity, reviewStatus, blind],
+    queryFn: ({ signal }) =>
+      getQueue(
+        blind
+          ? { asOfDay: day, operator, reviewStatus, mode: 'blind' }
+          : { asOfDay: day, operator, band, capacity, reviewStatus },
+        signal,
+      ),
+    placeholderData: (prev, prevQuery) =>
+      prevQuery && prevQuery.queryKey[6] === blind && (prevQuery.queryKey[1] as number) <= day ? prev : undefined,
   });
   const invalidDraft = draft !== null && parseCapacity(draft) === null;
 
@@ -151,14 +179,15 @@ export function QueueScreen() {
         <div>
           <h1 id="q-title">Review queue</h1>
           <p className="soft">
-            {data ? `${playerTotal(data.counts)} players` : 'Players'} from 5 operators, each shown {day}{' '}
+            {data && !blind ? `${playerTotal(data.counts)} players` : 'Players'} from 5 operators, each shown {day}{' '}
             {day === 1 ? 'day' : 'days'} after their first activity. Players whose history is shorter are shown at their
-            last day. The score is a relative priority for human review, not a diagnosis.
+            last day.
+            {blind ? null : ' The score is a relative priority for human review, not a diagnosis.'}
           </p>
         </div>
       </div>
 
-      {data && <Population counts={data.counts} day={day} />}
+      {data && !blind && <Population counts={data.counts} day={day} />}
 
       <div className="panel">
         <div className="filters">
@@ -171,17 +200,19 @@ export function QueueScreen() {
               ))}
             </select>
           </label>
-          <div className="field">
-            Band
-            <fieldset className="seg" aria-label="Band">
-              <button type="button" aria-pressed={band === 'high,elevated'} onClick={() => setParam('band', null)}>
-                High and elevated
-              </button>
-              <button type="button" aria-pressed={band === 'high'} onClick={() => setParam('band', 'high')}>
-                High
-              </button>
-            </fieldset>
-          </div>
+          {!blind && (
+            <div className="field">
+              Band
+              <fieldset className="seg" aria-label="Band">
+                <button type="button" aria-pressed={band === 'high,elevated'} onClick={() => setParam('band', null)}>
+                  High and elevated
+                </button>
+                <button type="button" aria-pressed={band === 'high'} onClick={() => setParam('band', 'high')}>
+                  High
+                </button>
+              </fieldset>
+            </div>
+          )}
           <div className="field">
             Review
             <fieldset className="seg" aria-label="Review status">
@@ -204,20 +235,38 @@ export function QueueScreen() {
               </button>
             </fieldset>
           </div>
-          <label className="field" htmlFor="top">
-            Show top
-            <input
-              id="top"
-              type="number"
-              min={1}
-              max={MAX_CAPACITY}
-              value={draft ?? capacity ?? defaultCapacity}
-              onChange={(e) => onCapacity(e.target.value)}
-              aria-invalid={invalidDraft || undefined}
-              onBlur={() => setDraft(null)}
+          {!blind && (
+            <label className="field" htmlFor="top">
+              Show top
+              <input
+                id="top"
+                type="number"
+                min={1}
+                max={MAX_CAPACITY}
+                value={draft ?? capacity ?? defaultCapacity}
+                onChange={(e) => onCapacity(e.target.value)}
+                aria-invalid={invalidDraft || undefined}
+                onBlur={() => setDraft(null)}
+              />
+            </label>
+          )}
+          <label className="switch" id="blindlbl">
+            <button
+              type="button"
+              role="switch"
+              aria-checked={blind}
+              aria-labelledby="blindlbl"
+              onClick={() => setParam('mode', blind ? null : 'blind')}
             />
+            Blind review
           </label>
         </div>
+        {blind && (
+          <p className="blindnote">
+            Blind review shows the fixed review sample in random order. The server leaves out score, band, rank and
+            reasons, so you judge each case from its activity alone.
+          </p>
+        )}
 
         {isError && !data ? (
           <p className="placeholder" role="alert">
@@ -233,43 +282,66 @@ export function QueueScreen() {
             <div className="tablewrap" aria-busy={isPlaceholderData}>
               <table>
                 <thead>
-                  <tr>
-                    <th className="r">Rank</th>
-                    <th>Player</th>
-                    <th>Operator</th>
-                    <th>Band</th>
-                    <th className="r">Score</th>
-                    <th>Last 30 days</th>
-                    <th>Main reason</th>
-                    <th>Rules</th>
-                    <th className="r">Day shown</th>
-                    <th>Review</th>
-                  </tr>
+                  {blind ? (
+                    <tr>
+                      <th>Case</th>
+                      <th>Player</th>
+                      <th>Operator</th>
+                      <th className="r">Day shown</th>
+                      <th>Your review</th>
+                    </tr>
+                  ) : (
+                    <tr>
+                      <th className="r">Rank</th>
+                      <th>Player</th>
+                      <th>Operator</th>
+                      <th>Band</th>
+                      <th className="r">Score</th>
+                      <th>Last 30 days</th>
+                      <th>Main reason</th>
+                      <th>Rules</th>
+                      <th className="r">Day shown</th>
+                      <th>Review</th>
+                    </tr>
+                  )}
                 </thead>
                 <tbody>
-                  {data?.items.map((item) => (
-                    <Row key={item.player_id} item={item} day={day} />
+                  {data?.items.map((item, i) => (
+                    <Row
+                      key={item.player_id}
+                      item={item}
+                      day={day}
+                      blind={blind}
+                      blindCase={blind ? i + 1 : undefined}
+                    />
                   ))}
                   {!data && (
                     <tr>
-                      <td colSpan={10} className="soft">
+                      <td colSpan={blind ? 5 : 10} className="soft">
                         Loading the queue…
                       </td>
                     </tr>
                   )}
                   {data?.items.length === 0 && (
                     <tr>
-                      <td colSpan={10} className="soft">
-                        {reviewStatus
-                          ? 'No players match these filters. Choose "All operators" or another review status.'
-                          : 'No players match these filters. Choose "All operators" or another band.'}
+                      <td colSpan={blind ? 5 : 10} className="soft">
+                        {blind && !operator && !reviewStatus
+                          ? 'No review sample is loaded for this model.'
+                          : reviewStatus || blind
+                            ? 'No players match these filters. Choose "All operators" or another review status.'
+                            : 'No players match these filters. Choose "All operators" or another band.'}
                       </td>
                     </tr>
                   )}
                 </tbody>
               </table>
             </div>
-            {data && (
+            {data && blind && (
+              <p className="more soft">
+                {data.items.length} {data.items.length === 1 ? 'case' : 'cases'} in the review sample shown.
+              </p>
+            )}
+            {data && !blind && (
               <p className="more soft">
                 {data.items.length} {data.items.length === 1 ? 'player' : 'players'} shown. Top {data.meta.capacity} by
                 review capacity.

@@ -101,13 +101,26 @@ func (s *Server) ListPlayerReviews(ctx context.Context, req gen.ListPlayerReview
 	if err != nil {
 		return gen.ListPlayerReviews400JSONResponse{InvalidJSONResponse: gen.InvalidJSONResponse(gen.Error{Code: "bad_request", Message: err.Error()})}, nil
 	}
+	params := store.ListPlayerReviewsParams{PlayerID: req.PlayerId, Day: day}
+	if mode := req.Params.Mode; mode != nil {
+		if !mode.Valid() {
+			return gen.ListPlayerReviews400JSONResponse{InvalidJSONResponse: gen.InvalidJSONResponse(gen.Error{Code: "bad_request", Message: "mode must be normal or blind"})}, nil
+		}
+		if *mode == gen.ListPlayerReviewsParamsModeBlind {
+			email, ok := auth.Email(ctx)
+			if !ok {
+				return nil, errors.New("no authenticated user")
+			}
+			params.BlindReviewer = pgtype.Text{String: email, Valid: true}
+		}
+	}
 	q := store.New(s.DB)
 	if _, err := q.PlayerLastDay(ctx, req.PlayerId); errors.Is(err, pgx.ErrNoRows) {
 		return gen.ListPlayerReviews404JSONResponse{NotFoundJSONResponse: gen.NotFoundJSONResponse(playerNotFound())}, nil
 	} else if err != nil {
 		return nil, err
 	}
-	rows, err := q.ListPlayerReviews(ctx, store.ListPlayerReviewsParams{PlayerID: req.PlayerId, Day: day})
+	rows, err := q.ListPlayerReviews(ctx, params)
 	if err != nil {
 		return nil, err
 	}

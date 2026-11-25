@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { type FormEvent, useEffect, useId, useState } from 'react';
-import { createReview, getReviews, type Outcome, type ReviewCreate } from '../api/client';
+import { createReview, getReviews, type Mode, type Outcome, type ReviewCreate } from '../api/client';
 import { outcomeLabel } from '../format';
 
 const OPTIONS: { value: Outcome; hint: string }[] = [
@@ -9,17 +9,17 @@ const OPTIONS: { value: Outcome; hint: string }[] = [
   { value: 'not_enough_data', hint: 'Look again later in the replay.' },
 ];
 
-type Props = { playerId: string; day: number; effectiveDay: number };
+type Props = { playerId: string; day: number; effectiveDay: number; mode?: Mode };
 
-export function ReviewPanel({ playerId, day, effectiveDay }: Props) {
+export function ReviewPanel({ playerId, day, effectiveDay, mode }: Props) {
   const uid = useId();
   const queryClient = useQueryClient();
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   const [note, setNote] = useState('');
   const [status, setStatus] = useState('');
   const reviews = useQuery({
-    queryKey: ['reviews', playerId, day],
-    queryFn: ({ signal }) => getReviews(playerId, day, signal),
+    queryKey: ['reviews', playerId, day, mode],
+    queryFn: ({ signal }) => getReviews(playerId, day, signal, mode),
   });
   const save = useMutation({
     mutationFn: (body: ReviewCreate) => createReview(playerId, body),
@@ -39,7 +39,7 @@ export function ReviewPanel({ playerId, day, effectiveDay }: Props) {
     e.preventDefault();
     if (!outcome) return setStatus('Choose an outcome to save the review.');
     setStatus('');
-    save.mutate({ as_of_day: day, outcome, mode: 'normal', ...(note && { note }) });
+    save.mutate({ as_of_day: day, outcome, mode: mode ?? 'normal', ...(note && { note }) });
   };
 
   const items = reviews.data?.items ?? [];

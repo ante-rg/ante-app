@@ -308,6 +308,42 @@ func (e GetPlayerParamsMode) Valid() bool {
 	}
 }
 
+// Defines values for ListPlayerReviewsParamsMode.
+const (
+	ListPlayerReviewsParamsModeBlind  ListPlayerReviewsParamsMode = "blind"
+	ListPlayerReviewsParamsModeNormal ListPlayerReviewsParamsMode = "normal"
+)
+
+// Valid indicates whether the value is a known member of the ListPlayerReviewsParamsMode enum.
+func (e ListPlayerReviewsParamsMode) Valid() bool {
+	switch e {
+	case ListPlayerReviewsParamsModeBlind:
+		return true
+	case ListPlayerReviewsParamsModeNormal:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for GetPlayerTimelineParamsMode.
+const (
+	GetPlayerTimelineParamsModeBlind  GetPlayerTimelineParamsMode = "blind"
+	GetPlayerTimelineParamsModeNormal GetPlayerTimelineParamsMode = "normal"
+)
+
+// Valid indicates whether the value is a known member of the GetPlayerTimelineParamsMode enum.
+func (e GetPlayerTimelineParamsMode) Valid() bool {
+	switch e {
+	case GetPlayerTimelineParamsModeBlind:
+		return true
+	case GetPlayerTimelineParamsModeNormal:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for GetQueueParamsMode.
 const (
 	GetQueueParamsModeBlind  GetQueueParamsMode = "blind"
@@ -483,30 +519,42 @@ type Outcome string
 
 // PlayerCase defines model for PlayerCase.
 type PlayerCase struct {
-	AsOfDay           int      `json:"as_of_day"`
+	AsOfDay int `json:"as_of_day"`
+
+	// Band Omitted in blind mode.
 	Band              *Band    `json:"band,omitempty"`
 	DaysObserved      int      `json:"days_observed"`
 	DepositsEurToDate *float64 `json:"deposits_eur_to_date,omitempty"`
 	DepositsToDate    int      `json:"deposits_to_date"`
 	EffectiveDay      int      `json:"effective_day"`
 
-	// FirstHighDay First day this player entered the high band
+	// FirstHighDay First day this player entered the high band. Omitted in blind mode.
 	FirstHighDay *int `json:"first_high_day,omitempty"`
 
-	// FirstRuleFlagDay First day any fixed rule fired
+	// FirstRuleFlagDay First day any fixed rule fired. Omitted in blind mode.
 	FirstRuleFlagDay  *int         `json:"first_rule_flag_day,omitempty"`
 	HistoryEndedOnDay *int         `json:"history_ended_on_day,omitempty"`
 	Meta              Meta         `json:"meta"`
 	OperatorCode      OperatorCode `json:"operator_code"`
 	PlayerId          string       `json:"player_id"`
-	Rank              *int         `json:"rank,omitempty"`
-	RankOf            *int         `json:"rank_of,omitempty"`
-	Reasons           *[]Reason    `json:"reasons,omitempty"`
-	RuleFlags         *[]struct {
+
+	// Rank Omitted in blind mode.
+	Rank *int `json:"rank,omitempty"`
+
+	// RankOf Omitted in blind mode.
+	RankOf *int `json:"rank_of,omitempty"`
+
+	// Reasons Omitted in blind mode.
+	Reasons *[]Reason `json:"reasons,omitempty"`
+
+	// RuleFlags Omitted in blind mode.
+	RuleFlags *[]struct {
 		FirstDay int    `json:"first_day"`
 		RuleId   string `json:"rule_id"`
 		Text     string `json:"text"`
 	} `json:"rule_flags,omitempty"`
+
+	// Score Omitted in blind mode.
 	Score          *float32 `json:"score,omitempty"`
 	SessionsToDate int      `json:"sessions_to_date"`
 }
@@ -515,7 +563,7 @@ type PlayerCase struct {
 type Queue struct {
 	AsOfDay int `json:"as_of_day"`
 
-	// Counts Band counts across all operators; omitted in blind mode.
+	// Counts Band counts across all operators; empty in blind mode.
 	Counts struct {
 		Elevated                *int `json:"elevated,omitempty"`
 		High                    *int `json:"high,omitempty"`
@@ -631,14 +679,18 @@ type Timeline struct {
 	AsOfDay int `json:"as_of_day"`
 
 	// Days Only days with activity; the client fills gaps with zero.
-	Days             []TimelineDay `json:"days"`
-	FirstHighDay     *int          `json:"first_high_day,omitempty"`
-	FirstRuleFlagDay *int          `json:"first_rule_flag_day,omitempty"`
-	Meta             Meta          `json:"meta"`
-	PlayerId         string        `json:"player_id"`
+	Days []TimelineDay `json:"days"`
 
-	// Scores One entry per day 0..effective day, ascending. Score is null where the model gave none.
-	Scores []TimelineScore `json:"scores"`
+	// FirstHighDay Omitted in blind mode.
+	FirstHighDay *int `json:"first_high_day,omitempty"`
+
+	// FirstRuleFlagDay Omitted in blind mode.
+	FirstRuleFlagDay *int   `json:"first_rule_flag_day,omitempty"`
+	Meta             Meta   `json:"meta"`
+	PlayerId         string `json:"player_id"`
+
+	// Scores One entry per day 0..effective day, ascending. Score is null where the model gave none. Omitted in blind mode.
+	Scores *[]TimelineScore `json:"scores,omitempty"`
 }
 
 // TimelineDay defines model for TimelineDay.
@@ -676,9 +728,6 @@ type Invalid = Error
 // NotFound defines model for NotFound.
 type NotFound = Error
 
-// NotImplemented defines model for NotImplemented.
-type NotImplemented = Error
-
 // Unauthorized defines model for Unauthorized.
 type Unauthorized = Error
 
@@ -701,8 +750,12 @@ type GetPlayerParamsMode string
 // ListPlayerReviewsParams defines parameters for ListPlayerReviews.
 type ListPlayerReviewsParams struct {
 	// AsOfDay Days since each player's own first activity. Defaults to replay.default_day.
-	AsOfDay *AsOfDay `form:"as_of_day,omitempty" json:"as_of_day,omitempty"`
+	AsOfDay *AsOfDay                     `form:"as_of_day,omitempty" json:"as_of_day,omitempty"`
+	Mode    *ListPlayerReviewsParamsMode `form:"mode,omitempty" json:"mode,omitempty"`
 }
+
+// ListPlayerReviewsParamsMode defines parameters for ListPlayerReviews.
+type ListPlayerReviewsParamsMode string
 
 // ListPlayerSessionsParams defines parameters for ListPlayerSessions.
 type ListPlayerSessionsParams struct {
@@ -717,8 +770,12 @@ type ListPlayerSessionsParams struct {
 // GetPlayerTimelineParams defines parameters for GetPlayerTimeline.
 type GetPlayerTimelineParams struct {
 	// AsOfDay Days since each player's own first activity. Defaults to replay.default_day.
-	AsOfDay *AsOfDay `form:"as_of_day,omitempty" json:"as_of_day,omitempty"`
+	AsOfDay *AsOfDay                     `form:"as_of_day,omitempty" json:"as_of_day,omitempty"`
+	Mode    *GetPlayerTimelineParamsMode `form:"mode,omitempty" json:"mode,omitempty"`
 }
+
+// GetPlayerTimelineParamsMode defines parameters for GetPlayerTimeline.
+type GetPlayerTimelineParamsMode string
 
 // GetQueueParams defines parameters for GetQueue.
 type GetQueueParams struct {
@@ -731,7 +788,7 @@ type GetQueueParams struct {
 	Band         *string                     `form:"band,omitempty" json:"band,omitempty"`
 	ReviewStatus *GetQueueParamsReviewStatus `form:"review_status,omitempty" json:"review_status,omitempty"`
 
-	// Capacity Review capacity, the number of rows returned. Defaults to the model card's default_capacity, else 10.
+	// Capacity Review capacity, the number of rows returned. Defaults to the model card's default_capacity, else 10. Ignored in blind mode.
 	Capacity *int `form:"capacity,omitempty" json:"capacity,omitempty"`
 }
 
@@ -1238,6 +1295,19 @@ func (siw *ServerInterfaceWrapper) ListPlayerReviews(w http.ResponseWriter, r *h
 		return
 	}
 
+	// ------------- Optional query parameter "mode" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "mode", r.URL.Query(), &params.Mode, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "mode"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "mode", Err: err})
+		}
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListPlayerReviews(w, r, playerId, params)
 	}))
@@ -1370,6 +1440,19 @@ func (siw *ServerInterfaceWrapper) GetPlayerTimeline(w http.ResponseWriter, r *h
 			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "as_of_day"})
 		} else {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "as_of_day", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "mode" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "mode", r.URL.Query(), &params.Mode, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "mode"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "mode", Err: err})
 		}
 		return
 	}
@@ -1679,8 +1762,6 @@ type InvalidJSONResponse Error
 
 type NotFoundJSONResponse Error
 
-type NotImplementedJSONResponse Error
-
 type UnauthorizedJSONResponse Error
 
 type GetModelCardRequestObject struct {
@@ -1818,20 +1899,6 @@ func (response GetPlayer404JSONResponse) VisitGetPlayerResponse(w http.ResponseW
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(404)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type GetPlayer501JSONResponse struct{ NotImplementedJSONResponse }
-
-func (response GetPlayer501JSONResponse) VisitGetPlayerResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(501)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -2144,20 +2211,6 @@ func (response GetQueue404JSONResponse) VisitGetQueueResponse(w http.ResponseWri
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(404)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type GetQueue501JSONResponse struct{ NotImplementedJSONResponse }
-
-func (response GetQueue501JSONResponse) VisitGetQueueResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(501)
 	_, err := buf.WriteTo(w)
 	return err
 }

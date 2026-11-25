@@ -50,6 +50,31 @@ const queueBody = {
   ],
 };
 
+const blindBody = {
+  as_of_day: 7,
+  mode: 'blind',
+  counts: {},
+  meta: { ...replayBody.meta, capacity: 10 },
+  items: [
+    {
+      player_id: 'S02',
+      operator_code: 'P2',
+      effective_day: 5,
+      history_ended_on_day: 5,
+      days_observed: 5,
+      review_status: 'pending',
+    },
+    {
+      player_id: 'S01',
+      operator_code: 'P1',
+      effective_day: 7,
+      days_observed: 7,
+      review_status: 'reviewed',
+      last_outcome: 'not_enough_data',
+    },
+  ],
+};
+
 const api = (q: { status: number; body: unknown } = { status: 200, body: queueBody }) =>
   mockApi({ '/api/v1/replay': { status: 200, body: replayBody }, '/api/v1/queue': q });
 
@@ -344,5 +369,120 @@ describe('QueueScreen', () => {
     renderApp('/?day=7');
     expect(await screen.findByRole('alert')).toHaveTextContent("Can't load the queue.");
     expect(screen.getByLabelText('Data as of day')).toBeInTheDocument();
+  });
+
+  describe('blind review', () => {
+    const blindApi = (body: unknown = blindBody) =>
+      mockApi({
+        '/api/v1/replay': { status: 200, body: replayBody },
+        '/api/v1/queue': { status: 200, body },
+      });
+
+    it('toggles blind mode through the switch and the URL', async () => {
+      const mock = api();
+      const { router } = renderApp('/?day=7');
+      await screen.findByRole('row', { name: 'Open case S01' });
+      const sw = screen.getByRole('switch', { name: 'Blind review' });
+      expect(sw).toHaveAttribute('aria-checked', 'false');
+      fireEvent.click(sw);
+      expect(router.state.location.search).toBe('?day=7&mode=blind');
+      expect(sw).toHaveAttribute('aria-checked', 'true');
+      await waitFor(() => expect(queueUrls(mock).some((u) => u.includes('mode=blind'))).toBe(true));
+      fireEvent.click(sw);
+      expect(router.state.location.search).toBe('?day=7');
+      expect(sw).toHaveAttribute('aria-checked', 'false');
+    });
+
+    it('does not show normal rows under the blind table while the blind fetch is pending', async () => {
+      api();
+      renderApp('/?day=7');
+      await screen.findByRole('row', { name: 'Open case S20' });
+      let release: (r: Response) => void = () => {};
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(() => new Promise<Response>((res) => (release = res))),
+      );
+      fireEvent.click(screen.getByRole('switch', { name: 'Blind review' }));
+      await waitFor(() => expect(screen.getByRole('switch', { name: 'Blind review' })).toBeChecked());
+      expect(screen.queryByRole('row', { name: 'Open case S20' })).toBeNull();
+      expect(screen.queryByText('R1')).toBeNull();
+      release(new Response(JSON.stringify(blindBody), { status: 200 }));
+      expect(await screen.findByRole('row', { name: 'Open case S02' })).toBeInTheDocument();
+    });
+
+    it('leaves the score sentence out of the blind intro', async () => {
+      blindApi();
+      renderApp('/?day=7&mode=blind');
+      await screen.findByRole('row', { name: 'Open case S01' });
+      expect(screen.queryByText(/relative priority/)).toBeNull();
+    });
+
+    it('does not send band or capacity in blind mode', async () => {
+      const mock = blindApi();
+      renderApp('/?day=7&mode=blind&band=high&capacity=3');
+      await screen.findByRole('row', { name: 'Open case S01' });
+      const u = queueUrls(mock)[0];
+      expect(u).toContain('mode=blind');
+      expect(u).not.toContain('band=');
+      expect(u).not.toContain('capacity=');
+    });
+
+    it('shows the note, blind columns, numbered cases and count', async () => {
+      blindApi();
+      renderApp('/?day=7&mode=blind');
+      await screen.findByRole('row', { name: 'Open case S01' });
+      expect(screen.getByText(/Blind review shows the fixed review sample in random order/)).toBeInTheDocument();
+      const heads = screen.getAllByRole('columnheader').map((h) => h.textContent);
+      expect(heads).toEqual(['Case', 'Player', 'Operator', 'Day shown', 'Your review']);
+      const rows = screen.getAllByRole('row').slice(1);
+      expect(rows[0].querySelectorAll('td')[0]).toHaveTextContent('1');
+      expect(rows[1].querySelectorAll('td')[0]).toHaveTextContent('2');
+      expect(rows[0]).toHaveTextContent('History ends on day 5');
+      expect(rows[0]).toHaveTextContent('To review');
+      expect(rows[1]).toHaveTextContent('Not enough data');
+      expect(screen.queryByRole('button', { name: 'High' })).toBeNull();
+      expect(screen.queryByLabelText('Show top')).toBeNull();
+      expect(screen.queryByRole('img')).toBeNull();
+      expect(screen.getByText('2 cases in the review sample shown.')).toBeInTheDocument();
+      expect(screen.getByRole('group', { name: 'Review status' })).toBeInTheDocument();
+      expect(screen.getByLabelText('Operator')).toBeInTheDocument();
+    });
+
+    it('opens a case in blind mode with Enter or click, and j/k still move', async () => {
+      blindApi();
+      const { router } = renderApp('/?day=7&mode=blind');
+      const s02 = await screen.findByRole('row', { name: 'Open case S02' });
+      s02.focus();
+      fireEvent.keyDown(s02, { key: 'j' });
+      expect(rowOf('Open case S01')).toHaveFocus();
+      fireEvent.keyDown(rowOf('Open case S01'), { key: 'k' });
+      expect(s02).toHaveFocus();
+      fireEvent.keyDown(s02, { key: 'Enter' });
+      expect(router.state.location.pathname).toBe('/players/S02');
+      expect(router.state.location.search).toBe('?day=7&mode=blind');
+      await router.navigate('/?day=7&mode=blind');
+      fireEvent.click(await screen.findByRole('row', { name: 'Open case S01' }));
+      expect(router.state.location.search).toBe('?day=7&mode=blind');
+    });
+
+    it('shows the review-status empty copy for an empty blind list', async () => {
+      blindApi({ ...blindBody, items: [] });
+      renderApp('/?day=7&mode=blind&operator=P3');
+      expect(
+        await screen.findByText('No players match these filters. Choose "All operators" or another review status.'),
+      ).toBeInTheDocument();
+    });
+
+    it('says no sample is loaded for an empty unfiltered blind list', async () => {
+      blindApi({ ...blindBody, items: [] });
+      renderApp('/?day=7&mode=blind');
+      expect(await screen.findByText('No review sample is loaded for this model.')).toBeInTheDocument();
+    });
+
+    it('keeps the filters copy for an empty blind list with a review filter', async () => {
+      blindApi({ ...blindBody, items: [] });
+      renderApp('/?day=7&mode=blind&review=pending');
+      expect(await screen.findByText(/No players match these filters/)).toBeInTheDocument();
+    });
   });
 });
