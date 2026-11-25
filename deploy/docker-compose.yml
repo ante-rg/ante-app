@@ -19,6 +19,8 @@ services:
     environment:
       DATABASE_URL: ${DATABASE_URL}
       SCORER_URL: http://scorer:8000
+      CF_ACCESS_TEAM_DOMAIN: ${CF_ACCESS_TEAM_DOMAIN:-}
+      CF_ACCESS_AUD: ${CF_ACCESS_AUD:-}
     depends_on:
       postgres:
         condition: service_healthy

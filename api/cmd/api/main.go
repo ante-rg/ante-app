@@ -11,9 +11,11 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/ante-rg/ante-app/api/internal/auth"
 	"github.com/ante-rg/ante-app/api/internal/config"
 	"github.com/ante-rg/ante-app/api/internal/db"
 	apihttp "github.com/ante-rg/ante-app/api/internal/http"
+	"github.com/ante-rg/ante-app/api/internal/store"
 )
 
 var version = "dev"
@@ -51,11 +53,17 @@ func run() error {
 		Client:    &http.Client{Timeout: 2 * time.Second},
 		Version:   version,
 	})
-	srv := &http.Server{Addr: cfg.Addr, Handler: apihttp.NewRouter(api, cfg.WebDir), ReadHeaderTimeout: 10 * time.Second}
+	authMode := "dev"
+	a := apihttp.Auth{DevUser: cfg.AuthDevUser}
+	if cfg.AuthDevUser == "" {
+		authMode = "cloudflare_access"
+		a = apihttp.Auth{Verifier: auth.NewAccess(ctx, cfg.CFAccessTeamDomain, cfg.CFAccessAUD)}
+	}
+	srv := &http.Server{Addr: cfg.Addr, Handler: apihttp.NewRouter(api, cfg.WebDir, a, store.New(pool)), ReadHeaderTimeout: 10 * time.Second}
 
 	errc := make(chan error, 1)
 	go func() { errc <- srv.ListenAndServe() }()
-	slog.Info("listening", "addr", cfg.Addr, "version", version)
+	slog.Info("listening", "addr", cfg.Addr, "version", version, "auth", authMode)
 
 	select {
 	case err := <-errc:

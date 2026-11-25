@@ -31,7 +31,7 @@ up:
 dev:
 	$(COMPOSE) up -d --wait postgres scorer
 	trap 'kill 0' INT TERM EXIT; \
-	(cd api && DATABASE_URL='postgres://postgres:$(POSTGRES_PASSWORD)@localhost:$(POSTGRES_PORT)/postgres?sslmode=disable' SCORER_URL=http://localhost:8000 go run ./cmd/api) & \
+	(cd api && DATABASE_URL='postgres://postgres:$(POSTGRES_PASSWORD)@localhost:$(POSTGRES_PORT)/postgres?sslmode=disable' SCORER_URL=http://localhost:8000 AUTH_DEV_USER=dev@localhost go run ./cmd/api) & \
 	(cd web && npm run dev) & \
 	wait
 

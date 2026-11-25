@@ -1682,6 +1682,20 @@ func (response GetModelCard200JSONResponse) VisitGetModelCardResponse(w http.Res
 	return err
 }
 
+type GetModelCard401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetModelCard401JSONResponse) VisitGetModelCardResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListOperatorsRequestObject struct {
 	Params ListOperatorsParams
 }
@@ -1703,6 +1717,20 @@ func (response ListOperators200JSONResponse) VisitListOperatorsResponse(w http.R
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListOperators401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListOperators401JSONResponse) VisitListOperatorsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -1740,6 +1768,20 @@ func (response GetPlayer400JSONResponse) VisitGetPlayerResponse(w http.ResponseW
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetPlayer401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetPlayer401JSONResponse) VisitGetPlayerResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -1796,6 +1838,20 @@ func (response ListPlayerReviews200JSONResponse) VisitListPlayerReviewsResponse(
 	return err
 }
 
+type ListPlayerReviews401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListPlayerReviews401JSONResponse) VisitListPlayerReviewsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type CreateReviewRequestObject struct {
 	PlayerId PlayerId `json:"player_id"`
 	Body     *CreateReviewJSONRequestBody
@@ -1815,6 +1871,20 @@ func (response CreateReview201JSONResponse) VisitCreateReviewResponse(w http.Res
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateReview401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response CreateReview401JSONResponse) VisitCreateReviewResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -1870,6 +1940,20 @@ func (response ListPlayerSessions200JSONResponse) VisitListPlayerSessionsRespons
 	return err
 }
 
+type ListPlayerSessions401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListPlayerSessions401JSONResponse) VisitListPlayerSessionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListPlayerSessions404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response ListPlayerSessions404JSONResponse) VisitListPlayerSessionsResponse(w http.ResponseWriter) error {
@@ -1917,6 +2001,20 @@ func (response GetPlayerTimeline400JSONResponse) VisitGetPlayerTimelineResponse(
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetPlayerTimeline401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetPlayerTimeline401JSONResponse) VisitGetPlayerTimelineResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -1971,6 +2069,20 @@ func (response GetQueue400JSONResponse) VisitGetQueueResponse(w http.ResponseWri
 	return err
 }
 
+type GetQueue401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetQueue401JSONResponse) VisitGetQueueResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetQueue404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response GetQueue404JSONResponse) VisitGetQueueResponse(w http.ResponseWriter) error {
@@ -2016,6 +2128,20 @@ func (response GetReplay200JSONResponse) VisitGetReplayResponse(w http.ResponseW
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetReplay401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetReplay401JSONResponse) VisitGetReplayResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
 	_, err := buf.WriteTo(w)
 	return err
 }

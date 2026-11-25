@@ -478,7 +478,7 @@ export interface components {
                 "application/json": components["schemas"]["Error"];
             };
         };
-        /** @description Missing or unknown API key */
+        /** @description Missing or invalid credentials */
         Unauthorized: {
             headers: {
                 [name: string]: unknown;
@@ -518,6 +518,7 @@ export interface operations {
                     "application/json": components["schemas"]["Replay"];
                 };
             };
+            401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
         };
     };
@@ -550,6 +551,7 @@ export interface operations {
                 };
             };
             400: components["responses"]["Invalid"];
+            401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
             501: components["responses"]["NotImplemented"];
         };
@@ -579,6 +581,7 @@ export interface operations {
                 };
             };
             400: components["responses"]["Invalid"];
+            401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
             501: components["responses"]["NotImplemented"];
         };
@@ -607,6 +610,7 @@ export interface operations {
                 };
             };
             400: components["responses"]["Invalid"];
+            401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
         };
     };
@@ -636,6 +640,7 @@ export interface operations {
                     "application/json": components["schemas"]["SessionPage"];
                 };
             };
+            401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
         };
     };
@@ -661,6 +666,7 @@ export interface operations {
                     };
                 };
             };
+            401: components["responses"]["Unauthorized"];
         };
     };
     createReview: {
@@ -687,6 +693,7 @@ export interface operations {
                     "application/json": components["schemas"]["Review"];
                 };
             };
+            401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
             422: components["responses"]["Invalid"];
         };
@@ -715,6 +722,7 @@ export interface operations {
                     };
                 };
             };
+            401: components["responses"]["Unauthorized"];
         };
     };
     getModelCard: {
@@ -735,6 +743,7 @@ export interface operations {
                     "application/json": components["schemas"]["ModelCard"];
                 };
             };
+            401: components["responses"]["Unauthorized"];
         };
     };
     ingestEvents: {
