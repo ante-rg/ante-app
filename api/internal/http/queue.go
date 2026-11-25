@@ -73,29 +73,30 @@ func (s *Server) GetQueue(ctx context.Context, req gen.GetQueueRequestObject) (g
 	if err != nil {
 		return nil, err
 	}
-	items := []gen.QueueItem{}
-	if p.ReviewStatus == nil || *p.ReviewStatus != gen.GetQueueParamsReviewStatusReviewed {
-		var op pgtype.Text
-		if p.Operator != nil {
-			op = pgtype.Text{String: *p.Operator, Valid: true}
-		}
-		rows, err := q.ListQueue(ctx, store.ListQueueParams{
-			ModelVersion: m.Version, Day: day, Bands: bands, Operator: op, RowLimit: capacity,
-		})
+	var op, status pgtype.Text
+	if p.Operator != nil {
+		op = pgtype.Text{String: *p.Operator, Valid: true}
+	}
+	if p.ReviewStatus != nil && *p.ReviewStatus != gen.GetQueueParamsReviewStatusAll {
+		status = pgtype.Text{String: string(*p.ReviewStatus), Valid: true}
+	}
+	rows, err := q.ListQueue(ctx, store.ListQueueParams{
+		ModelVersion: m.Version, Day: day, Bands: bands, Operator: op, ReviewStatus: status, RowLimit: capacity,
+	})
+	if err != nil {
+		return nil, err
+	}
+	items := make([]gen.QueueItem, 0, len(rows))
+	for _, r := range rows {
+		it, err := queueItem(r, day)
 		if err != nil {
 			return nil, err
 		}
-		for _, r := range rows {
-			it, err := queueItem(r, day)
-			if err != nil {
-				return nil, err
-			}
-			items = append(items, it)
-		}
+		items = append(items, it)
 	}
 
 	out := gen.Queue{AsOfDay: int(day), Items: items, Meta: m.meta(capacity), Mode: gen.QueueMode(gen.GetQueueParamsModeNormal)}
-	high, elevated, low, insuff, pending, newHigh := int(c.High), int(c.Elevated), int(c.Low), int(c.InsufficientData), int(c.High+c.Elevated), int(c.NewHigh)
+	high, elevated, low, insuff, pending, newHigh := int(c.High), int(c.Elevated), int(c.Low), int(c.InsufficientData), int(c.PendingReview), int(c.NewHigh)
 	out.Counts.High, out.Counts.Elevated, out.Counts.Low = &high, &elevated, &low
 	out.Counts.InsufficientData, out.Counts.PendingReview, out.Counts.NewHighSincePreviousDay = &insuff, &pending, &newHigh
 	return gen.GetQueue200JSONResponse(out), nil
@@ -116,6 +117,11 @@ func queueItem(r store.ListQueueRow, day int32) (gen.QueueItem, error) {
 	if day > r.LastDay {
 		last := int(r.LastDay)
 		it.HistoryEndedOnDay = &last
+	}
+	if r.LastOutcome.Valid {
+		o := gen.Outcome(r.LastOutcome.String)
+		it.LastOutcome = &o
+		it.ReviewStatus = gen.QueueItemReviewStatusReviewed
 	}
 	if r.Rank.Valid {
 		rank := int(r.Rank.Int32)

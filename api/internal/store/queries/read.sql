@@ -11,12 +11,20 @@ SELECT r.player_id, p.operator_code, p.last_day, r.rank, r.score, r.band,
        to_jsonb(ARRAY(SELECT s.score FROM generate_series(least(r.day, p.last_day) - 29, least(r.day, p.last_day)) AS d
                       LEFT JOIN daily_scores s ON s.model_version = r.model_version
                                               AND s.player_id = r.player_id AND s.day = d
-                      ORDER BY d))::jsonb AS trend
+                      ORDER BY d))::jsonb AS trend,
+       lr.outcome AS last_outcome
 FROM daily_ranks r
 JOIN players p ON p.player_id = r.player_id
+LEFT JOIN reviews lr ON lr.id = (
+  SELECT v.id FROM reviews v
+  WHERE v.player_id = r.player_id AND v.as_of_day <= @day
+  ORDER BY v.id DESC LIMIT 1)
 WHERE r.model_version = @model_version AND r.day = @day
   AND r.band = ANY(@bands::text[])
   AND (sqlc.narg(operator)::text IS NULL OR p.operator_code = sqlc.narg(operator)::text)
+  AND (sqlc.narg(review_status)::text IS NULL
+       OR (sqlc.narg(review_status)::text = 'pending' AND lr.id IS NULL)
+       OR (sqlc.narg(review_status)::text = 'reviewed' AND lr.id IS NOT NULL))
 ORDER BY r.rank NULLS LAST, r.player_id
 LIMIT @row_limit;
 
@@ -28,7 +36,9 @@ SELECT (count(*) FILTER (WHERE r.band = 'high'))::int AS high,
        (count(*) FILTER (WHERE r.band = 'high' AND r.day > 0 AND NOT EXISTS (
             SELECT 1 FROM daily_ranks q
              WHERE q.model_version = r.model_version AND q.day = r.day - 1
-               AND q.player_id = r.player_id AND q.band = 'high')))::int AS new_high
+               AND q.player_id = r.player_id AND q.band = 'high')))::int AS new_high,
+       (count(*) FILTER (WHERE r.band IN ('high', 'elevated') AND NOT EXISTS (
+            SELECT 1 FROM reviews v WHERE v.player_id = r.player_id AND v.as_of_day <= @day)))::int AS pending_review
 FROM daily_ranks r
 WHERE r.model_version = @model_version AND r.day = @day;
 

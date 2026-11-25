@@ -76,14 +76,6 @@ func (s *Server) ListPlayerSessions(context.Context, gen.ListPlayerSessionsReque
 	return nil, errNotImplemented
 }
 
-func (s *Server) ListPlayerReviews(context.Context, gen.ListPlayerReviewsRequestObject) (gen.ListPlayerReviewsResponseObject, error) {
-	return nil, errNotImplemented
-}
-
-func (s *Server) CreateReview(context.Context, gen.CreateReviewRequestObject) (gen.CreateReviewResponseObject, error) {
-	return nil, errNotImplemented
-}
-
 func (s *Server) ListOperators(context.Context, gen.ListOperatorsRequestObject) (gen.ListOperatorsResponseObject, error) {
 	return nil, errNotImplemented
 }
