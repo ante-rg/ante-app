@@ -2,6 +2,7 @@
 *.parquet
 *.csv
 !fixtures/**/*.csv
+!/api/internal/baseline/ecb_rates.csv
 artifacts/
 !/api/internal/artifacts/
 data/

@@ -7,65 +7,58 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/parquet-go/parquet-go"
+	"time"
 
 	"github.com/ante-rg/ante-app/api/internal/artifacts"
 )
 
-type evRow struct {
-	Acct      string   `parquet:"share_account_id"`
-	Project   string   `parquet:"project_code"`
-	Order     int64    `parquet:"event_order"`
-	SessionNo int64    `parquet:"session_no"`
-	Day       int64    `parquet:"days_from_first_event"`
-	Secs      int64    `parquet:"seconds_from_session_start"`
-	Hour      int32    `parquet:"local_hour"`
-	Type      string   `parquet:"event_type"`
-	Pay       *float64 `parquet:"payment_amount_eur,optional"`
-	Bal       *float64 `parquet:"balance_after_eur,optional"`
-}
-
-type rdRow struct {
-	Acct      string   `parquet:"share_account_id"`
-	SessionNo int64    `parquet:"bet_session_no"`
-	Stake     *float64 `parquet:"stake_eur,optional"`
-	Returned  *float64 `parquet:"returned_eur,optional"`
-}
-
-func writeParquet[T any](t *testing.T, path string, rows []T) {
-	t.Helper()
-	fh, err := os.Create(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = fh.Close() }()
-	w := parquet.NewGenericWriter[T](fh)
-	if _, err := w.Write(rows); err != nil {
-		t.Fatal(err)
-	}
-	if err := w.Close(); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func f(x float64) *float64 { return &x }
-
-func export(t *testing.T, lastDay int64) string {
+func export(t *testing.T, lastDay int) string {
 	t.Helper()
 	dir := t.TempDir()
-	events := []evRow{
-		{"ZQ-ACCT-1", "P1", 1, 1, 2, 0, 3, "BET", nil, f(100)},
-		{"ZQ-ACCT-1", "P1", 2, 1, 2, 100, 3, "DEPOSIT", f(50), f(150)},
-		{"ZQ-ACCT-1", "P1", 3, 2, lastDay, 0, 12, "BET", nil, nil},
-		{"ZQ-ACCT-1", "P1", 4, 2, lastDay, 600, 12, "BET", nil, f(90)},
-		{"ZQ-ACCT-2", "P2", 1, 1, 1, 0, 10, "BET", nil, nil},
-		{"ZQ-ACCT-2", "P2", 2, 1, 1, 60, 10, "BET", nil, nil},
+	batch := filepath.Join(dir, "b1")
+	day := func(d int, clock string) string {
+		return time.Date(2021, 11, 1, 0, 0, 0, 0, time.UTC).AddDate(0, 0, d).Format("2006-01-02") + "T" + clock + "Z"
 	}
-	rounds := []rdRow{{"ZQ-ACCT-1", 1, f(60), f(30)}}
-	writeParquet(t, filepath.Join(dir, "events.parquet"), events)
-	writeParquet(t, filepath.Join(dir, "rounds.parquet"), rounds)
+	events := map[string][]string{
+		"1/9911223344": {
+			"1,1," + day(0, "03:00:00") + ",ROUND,60,30,,100",
+			"2,2," + day(0, "03:01:40") + ",DepositWithdraw,,,50,150",
+			"3,3," + day(lastDay, "12:00:00") + ",ROUND,,,,95",
+			"4,4," + day(lastDay, "12:10:00") + ",ROUND,,,,90",
+		},
+		"2/1":    {"1,1," + day(1, "10:00:00") + ",ROUND,,,,10", "2,2," + day(1, "10:01:00") + ",ROUND,,,,10"},
+		"3/1":    {"1,1," + day(0, "10:00:00") + ",ROUND,,,,10"},
+		"4/1":    {"1,1," + day(0, "10:00:00") + ",ROUND,,,,10"},
+		"4455/1": {"1,1," + day(0, "10:00:00") + ",ROUND,,,,10"},
+		"4455/2": {"1,1," + day(0, "10:00:00") + ",ROUND,,,,10"},
+	}
+	list := "file,net_id,player_id,currency,currency_basis\n"
+	for k, rows := range events {
+		net, player, _ := strings.Cut(k, "/")
+		rel := filepath.Join("csv", net, player+".csv")
+		currency := "EUR"
+		if k == "4455/2" {
+			currency = "RUB"
+		}
+		list += rel + "," + net + "," + player + "," + currency + ",x\n"
+		body := "player_id,event_id,event_order,timestamp,event_type,bet_amount,win_amount,amount,balance_after\n"
+		for _, row := range rows {
+			body += player + "," + row + "\n"
+		}
+		write(t, filepath.Join(batch, rel), body)
+	}
+	write(t, filepath.Join(batch, "account_currency.csv"), list)
 	return dir
+}
+
+func write(t *testing.T, path, body string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func readCard(t *testing.T, out string) map[string]any {
@@ -96,11 +89,19 @@ func TestRun_WritesValidArtifacts(t *testing.T) {
 		t.Fatal(err)
 	}
 	card := readCard(t, out)
-	if card["synthetic"] != false || card["model_version"] != "tsi-test-v0" || card["dataset_version"] != "TSI-100-v1" {
+	if card["synthetic"] != false || card["model_version"] != "tsi-test-v0" || card["dataset_version"] != "ANTE financial CSV v4 (2026-11-23)" {
 		t.Errorf("card = %v", card)
 	}
 	if m, ok := card["metrics"].([]any); !ok || len(m) != 0 {
 		t.Errorf("metrics = %#v, want []", card["metrics"])
+	}
+	limits, _ := card["limits"].([]any)
+	found := false
+	for _, l := range limits {
+		found = found || strings.Contains(l.(string), "1 accounts")
+	}
+	if !found {
+		t.Errorf("limits = %v, want a skipped-accounts entry with 1 accounts", limits)
 	}
 	if card["default_day"] != float64(5) {
 		t.Errorf("default_day = %v, want 5", card["default_day"])
@@ -112,8 +113,32 @@ func TestRun_WritesValidArtifacts(t *testing.T) {
 			parquets++
 		}
 	}
-	if parquets != 6 || strings.Contains(stderr.String(), "ZQ-ACCT") {
+	if parquets != 6 {
 		t.Errorf("stderr = %q", stderr.String())
+	}
+	logged := strings.NewReplacer(in, "", out, "").Replace(stderr.String())
+	for _, id := range []string{"9911223344", "4455"} {
+		if strings.Contains(logged, id) {
+			t.Errorf("stderr leaks operator id %s: %q", id, logged)
+		}
+	}
+	files, err := os.ReadDir(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(files) != 7 {
+		t.Errorf("%d files in output, want 6 parquet + model_card.json", len(files))
+	}
+	for _, f := range files {
+		b, err := os.ReadFile(filepath.Join(out, f.Name()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, id := range []string{"9911223344", "4455"} {
+			if bytes.Contains(b, []byte(id)) {
+				t.Errorf("%s contains operator id %s", f.Name(), id)
+			}
+		}
 	}
 }
 
@@ -201,7 +226,7 @@ func TestRun_RequiresIn(t *testing.T) {
 		t.Error("want error without -in")
 	}
 	err := run([]string{"-in", t.TempDir(), "-out", out}, &bytes.Buffer{})
-	if err == nil || !strings.Contains(err.Error(), "events.parquet") {
-		t.Errorf("err = %v, want events.parquet", err)
+	if err == nil || !strings.Contains(err.Error(), "no batch folder") {
+		t.Errorf("err = %v, want no batch folder", err)
 	}
 }
