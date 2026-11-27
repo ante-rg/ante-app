@@ -28,8 +28,8 @@ func main() {
 func run(args []string, stderr io.Writer) error {
 	flags := flag.NewFlagSet("baseline", flag.ContinueOnError)
 	flags.SetOutput(stderr)
-	in := flags.String("in", "", "folder with events.parquet and rounds.parquet (required)")
-	out := flags.String("out", "../artifacts/tsi100-baseline-v0", "output folder, must not exist or be empty")
+	in := flags.String("in", "", "folder with the v4 batch folders (required)")
+	out := flags.String("out", "../artifacts/v4-baseline-v0", "output folder, must not exist or be empty")
 	if err := flags.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return nil
@@ -49,7 +49,7 @@ func run(args []string, stderr io.Writer) error {
 	if err := checkEmpty(dir); err != nil {
 		return err
 	}
-	players, sessions, act, err := baseline.Build(*in)
+	players, sessions, act, skipped, err := baseline.Build(*in)
 	if err != nil {
 		return err
 	}
@@ -70,7 +70,7 @@ func run(args []string, stderr io.Writer) error {
 	if err := os.Chmod(tmp, 0o755); err != nil {
 		return fmt.Errorf("chmod %s: %w", tmp, err)
 	}
-	if err := fakeartifacts.Write(tmp, ds, baseline.Card(filepath.Base(dir), ds)); err != nil {
+	if err := fakeartifacts.Write(tmp, ds, baseline.Card(filepath.Base(dir), ds, skipped)); err != nil {
 		return err
 	}
 	if err := moveIntoPlace(tmp, dir); err != nil {
@@ -85,6 +85,7 @@ func run(args []string, stderr io.Writer) error {
 	} {
 		_, _ = fmt.Fprintf(stderr, "%s.parquet %d rows\n", l.name, l.n)
 	}
+	_, _ = fmt.Fprintf(stderr, "skipped accounts (no EUR rate): %d\n", skipped)
 	_, _ = fmt.Fprintln(stderr, "model_card.json written")
 	return nil
 }

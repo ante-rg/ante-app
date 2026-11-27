@@ -1,46 +1,42 @@
 package baseline
 
 import (
+	"encoding/csv"
+	"fmt"
+	"io"
 	"math"
+	"os"
 	"slices"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/ante-rg/ante-app/api/internal/fakeartifacts"
 )
 
 const (
-	fileEvents = "events.parquet"
-	fileRounds = "rounds.parquet"
-	maxDay     = 36500
-	nightEnd   = 5
-	depositTyp = "DEPOSIT"
+	maxDay      = 36500
+	nightEnd    = 5
+	sessionGap  = 60 * time.Minute
+	requiredCol = "event_order timestamp event_type bet_amount win_amount amount balance_after"
 )
 
-var colsEvents = []col{
-	{"share_account_id", kStr, false}, {"project_code", kStr, false},
-	{"event_order", kInt, false}, {"session_no", kInt, false},
-	{"days_from_first_event", kInt, false}, {"seconds_from_session_start", kInt, false},
-	{"local_hour", kInt, false}, {"event_type", kStr, false},
-	{"payment_amount_eur", kFloat, true}, {"balance_after_eur", kFloat, true},
+type Error struct {
+	File   string
+	Row    int
+	Column string
+	Rule   string
 }
 
-var colsRounds = []col{
-	{"share_account_id", kStr, false}, {"bet_session_no", kInt, false},
-	{"stake_eur", kFloat, true}, {"returned_eur", kFloat, true},
-}
-
-type sessKey struct {
-	acct string
-	no   int32
-}
-
-type sess struct {
-	minOrder       int64
-	startDay       int32
-	startHour      int32
-	maxSecs        int32
-	depN           int32
-	depEUR, netEUR float64
+func (e *Error) Error() string {
+	switch {
+	case e.Row > 0:
+		return fmt.Sprintf("%s: row %d: %s: %s", e.File, e.Row, e.Column, e.Rule)
+	case e.Column != "":
+		return fmt.Sprintf("%s: %s: %s", e.File, e.Column, e.Rule)
+	default:
+		return fmt.Sprintf("%s: %s", e.File, e.Rule)
+	}
 }
 
 type balance struct {
@@ -49,135 +45,208 @@ type balance struct {
 }
 
 type acct struct {
-	project  string
-	lastDay  int32
-	deposits int32
-	sessions int32
 	balances map[int32]balance
 }
 
-func Build(dir string) ([]fakeartifacts.Player, []fakeartifacts.Session, []fakeartifacts.Activity, error) {
-	accts := map[string]*acct{}
-	sessions := map[sessKey]*sess{}
-	if err := scan(dir, fileEvents, colsEvents, func(d *dec) error {
-		return readEvent(d, accts, sessions)
-	}); err != nil {
-		return nil, nil, nil, err
-	}
-	if err := scan(dir, fileRounds, colsRounds, func(d *dec) error {
-		return readRound(d, sessions)
-	}); err != nil {
-		return nil, nil, nil, err
-	}
-	players, ss := assemble(accts, sessions)
-	return players, ss, activity(accts, ss), nil
+func Build(in string) ([]fakeartifacts.Player, []fakeartifacts.Session, []fakeartifacts.Activity, int, error) {
+	return build(in, 5)
 }
 
-func readEvent(d *dec, accts map[string]*acct, sessions map[sessKey]*sess) error {
-	id, project := d.str(0), d.str(1)
-	order, no, day, secs, hour := d.int(2), d.int(3), d.int(4), d.int(5), d.int(6)
-	typ := d.str(7)
-	pay, hasPay := d.float(8)
-	bal, hasBal := d.float(9)
-	if d.err != nil {
-		return nil
+func build(in string, brands int) ([]fakeartifacts.Player, []fakeartifacts.Session, []fakeartifacts.Activity, int, error) {
+	r, err := loadRates()
+	if err != nil {
+		return nil, nil, nil, 0, err
 	}
-	switch {
-	case id == "":
-		d.fail(0, "must not be empty")
-	case project == "":
-		d.fail(1, "must not be empty")
-	case day < 0 || day > maxDay:
-		d.fail(4, "out of range")
-	case no < 0 || no > math.MaxInt32:
-		d.fail(3, "out of range")
-	case secs < 0 || secs > math.MaxInt32:
-		d.fail(5, "out of range")
-	case hour < 0 || hour > 23:
-		d.fail(6, "out of range")
-	case typ == depositTyp && !hasPay:
-		d.fail(8, "must not be null on a deposit")
-	case typ == depositTyp && pay < 0:
-		d.fail(8, "must not be negative")
+	accts, skipped, err := listAccounts(in, r, brands)
+	if err != nil {
+		return nil, nil, nil, 0, err
 	}
-	if d.err != nil {
-		return nil
+	var players []fakeartifacts.Player
+	var sessions []fakeartifacts.Session
+	byID := map[string]*acct{}
+	for _, a := range accts {
+		p, ss, ac, err := readAccount(a, r)
+		if err != nil {
+			return nil, nil, nil, 0, err
+		}
+		players, sessions, byID[a.ID] = append(players, p), append(sessions, ss...), ac
 	}
-	a := accts[id]
-	if a == nil {
-		a = &acct{project: project, balances: map[int32]balance{}}
-		accts[id] = a
-	} else if a.project != project {
-		d.fail(1, "account on more than one project")
-		return nil
+	return players, sessions, activity(byID, sessions), skipped, nil
+}
+
+type event struct {
+	line     int
+	order    int64
+	ts       time.Time
+	eur      float64
+	typ      string
+	bet, win float64
+	amt, bal float64
+}
+
+func readAccount(a account, r rates) (p fakeartifacts.Player, ss []fakeartifacts.Session, ac *acct, err error) {
+	file := "account " + a.ID
+	bad := func(line int, column, rule string) error {
+		return &Error{File: file, Row: line, Column: column, Rule: rule}
 	}
-	a.lastDay = max(a.lastDay, int32(day))
-	if hasBal && typ != "GAME_STATE" {
-		if b, ok := a.balances[int32(day)]; !ok || order > b.order {
-			a.balances[int32(day)] = balance{order, bal}
+	fh, err := os.Open(a.Path)
+	if err != nil {
+		return p, nil, nil, bad(0, "", "cannot read file")
+	}
+	defer func() { _ = fh.Close() }()
+	cr := csv.NewReader(fh)
+	cr.FieldsPerRecord = -1
+	head, err := cr.Read()
+	if err != nil {
+		return p, nil, nil, bad(0, "", "malformed csv")
+	}
+	col := map[string]int{}
+	for i, h := range head {
+		col[h] = i
+	}
+	for _, name := range strings.Fields(requiredCol) {
+		if _, ok := col[name]; !ok {
+			return p, nil, nil, bad(0, name, "missing column")
 		}
 	}
-	k := sessKey{id, int32(no)}
-	s := sessions[k]
-	if s == nil {
-		s = &sess{minOrder: math.MaxInt64}
-		sessions[k] = s
-		a.sessions++
+	var evs []event
+	for line := 1; ; line++ {
+		rec, rerr := cr.Read()
+		if rerr == io.EOF {
+			break
+		}
+		if rerr != nil {
+			return p, nil, nil, bad(line, "", "malformed csv")
+		}
+		e, err := parseEvent(rec, col, line, a.Currency, r, bad)
+		if err != nil {
+			return p, nil, nil, err
+		}
+		if n := len(evs); n > 0 && e.order <= evs[n-1].order {
+			return p, nil, nil, bad(line, "event_order", "must increase")
+		}
+		evs = append(evs, e)
 	}
-	if order < s.minOrder {
-		s.minOrder, s.startDay, s.startHour = order, int32(day), int32(hour)
+	if len(evs) == 0 {
+		return p, nil, nil, bad(0, "", "no events")
 	}
-	s.maxSecs = max(s.maxSecs, int32(secs))
-	if typ == depositTyp {
-		s.depN++
-		s.depEUR += pay
-		a.deposits++
+	t0 := evs[0].ts
+	for _, e := range evs {
+		if e.ts.Before(t0) {
+			t0 = e.ts
+		}
 	}
-	return nil
+	ac = &acct{balances: map[int32]balance{}}
+	p = fakeartifacts.Player{ID: a.ID, Operator: a.Operator}
+	var cur *fakeartifacts.Session
+	var minTs, maxTs time.Time
+	var dep, net float64
+	closeSession := func() {
+		if cur == nil {
+			return
+		}
+		cur.DurationS = int32(maxTs.Sub(minTs) / time.Second)
+		cur.DepositsEUR, cur.NetResultEUR = cents(dep), cents(net)
+		cur.IsChase = fakeartifacts.IsChase(cur.DurationS, cur.DepositsN, cur.NetResultEUR)
+		ss = append(ss, *cur)
+	}
+	for i, e := range evs {
+		d := int64(e.ts.Sub(t0) / (24 * time.Hour))
+		if d > maxDay {
+			return p, nil, nil, bad(e.line, "timestamp", "out of range")
+		}
+		day := int32(d)
+		p.LastDay = max(p.LastDay, day)
+		if b, ok := ac.balances[day]; !ok || e.order > b.order {
+			ac.balances[day] = balance{e.order, cents(e.bal * e.eur)}
+		}
+		if i == 0 || e.ts.Sub(evs[i-1].ts) > sessionGap {
+			closeSession()
+			cur = &fakeartifacts.Session{PlayerID: a.ID, No: int32(len(ss) + 1), StartDay: day,
+				IsNight: e.ts.UTC().Hour() <= nightEnd}
+			minTs, maxTs, dep, net = e.ts, e.ts, 0, 0
+		}
+		if e.ts.Before(minTs) {
+			minTs = e.ts
+		}
+		if e.ts.After(maxTs) {
+			maxTs = e.ts
+		}
+		switch e.typ {
+		case "ROUND":
+			net += (e.win - e.bet) * e.eur
+		case "GameAction:bet":
+			net -= e.bet * e.eur
+		case "GameAction:win", "FreeRound":
+			net += e.win * e.eur
+		case "DepositWithdraw":
+			if e.amt > 0 {
+				cur.DepositsN++
+				p.DepositCount++
+				dep += e.amt * e.eur
+			}
+		}
+	}
+	closeSession()
+	p.SessionCount = int32(len(ss))
+	return p, ss, ac, nil
 }
 
-func readRound(d *dec, sessions map[sessKey]*sess) error {
-	id, no := d.str(0), d.int(1)
-	stake, _ := d.float(2)
-	ret, _ := d.float(3)
-	if d.err != nil {
-		return nil
+func parseEvent(rec []string, col map[string]int, line int, cur string, r rates,
+	bad func(int, string, string) error,
+) (e event, err error) {
+	get := func(name string) string {
+		if i := col[name]; i < len(rec) {
+			return rec[i]
+		}
+		return ""
 	}
-	s := sessions[sessKey{id, int32(no)}]
-	if no < 0 || no > math.MaxInt32 || s == nil {
-		d.fail(1, "no event session for this round")
-		return nil
+	num := func(name string, required, nonNeg bool) (float64, error) {
+		s := get(name)
+		if s == "" {
+			if required {
+				return 0, bad(line, name, "must not be empty")
+			}
+			return 0, nil
+		}
+		x, err := strconv.ParseFloat(s, 64)
+		if err != nil || math.IsNaN(x) || math.IsInf(x, 0) {
+			return 0, bad(line, name, "must be a finite number")
+		}
+		if nonNeg && x < 0 {
+			return 0, bad(line, name, "must not be negative")
+		}
+		return x, nil
 	}
-	s.netEUR += ret - stake
-	return nil
+	e = event{line: line, typ: get("event_type")}
+	if e.order, err = strconv.ParseInt(get("event_order"), 10, 64); err != nil {
+		return e, bad(line, "event_order", "must be an integer")
+	}
+	if e.ts, err = time.Parse(time.RFC3339, get("timestamp")); err != nil {
+		return e, bad(line, "timestamp", "must be an RFC 3339 time")
+	}
+	if e.bet, err = num("bet_amount", false, true); err != nil {
+		return e, err
+	}
+	if e.win, err = num("win_amount", false, true); err != nil {
+		return e, err
+	}
+	if e.amt, err = num("amount", false, false); err != nil {
+		return e, err
+	}
+	if e.bal, err = num("balance_after", true, false); err != nil {
+		return e, err
+	}
+	month := e.ts.UTC().Format("2006-01")
+	rate, ok := r.rate(cur, month)
+	if !ok {
+		return e, bad(line, "timestamp", "no EUR rate for "+cur+" "+month)
+	}
+	e.eur = 1 / rate
+	return e, nil
 }
 
 func cents(x float64) float64 { return math.Round(x*100) / 100 }
-
-func assemble(accts map[string]*acct, sessions map[sessKey]*sess) ([]fakeartifacts.Player, []fakeartifacts.Session) {
-	players := make([]fakeartifacts.Player, 0, len(accts))
-	for id, a := range accts {
-		players = append(players, fakeartifacts.Player{ID: id, Operator: a.project, LastDay: a.lastDay,
-			SessionCount: a.sessions, DepositCount: a.deposits})
-	}
-	slices.SortFunc(players, func(a, b fakeartifacts.Player) int { return strings.Compare(a.ID, b.ID) })
-	out := make([]fakeartifacts.Session, 0, len(sessions))
-	for k, s := range sessions {
-		net := cents(s.netEUR)
-		out = append(out, fakeartifacts.Session{
-			PlayerID: k.acct, No: k.no, StartDay: s.startDay, DurationS: s.maxSecs, DepositsN: s.depN,
-			DepositsEUR: cents(s.depEUR), NetResultEUR: net,
-			IsNight: s.startHour <= nightEnd, IsChase: fakeartifacts.IsChase(s.maxSecs, s.depN, net),
-		})
-	}
-	slices.SortFunc(out, func(a, b fakeartifacts.Session) int {
-		if c := strings.Compare(a.PlayerID, b.PlayerID); c != 0 {
-			return c
-		}
-		return int(a.No) - int(b.No)
-	})
-	return players, out
-}
 
 func activity(accts map[string]*acct, ss []fakeartifacts.Session) []fakeartifacts.Activity {
 	type dayKey struct {

@@ -1,10 +1,14 @@
 package baseline
 
-import "github.com/ante-rg/ante-app/api/internal/fakeartifacts"
+import (
+	"fmt"
 
-const datasetVersion = "TSI-100-v1"
+	"github.com/ante-rg/ante-app/api/internal/fakeartifacts"
+)
 
-func Card(version string, ds fakeartifacts.Dataset) fakeartifacts.Card {
+const datasetVersion = "ANTE financial CSV v4 (2026-11-23)"
+
+func Card(version string, ds fakeartifacts.Dataset, skipped int) fakeartifacts.Card {
 	return fakeartifacts.Card{
 		ModelVersion:    version,
 		Synthetic:       false,
@@ -14,22 +18,22 @@ func Card(version string, ds fakeartifacts.Dataset) fakeartifacts.Card {
 		Summary: "A rule baseline, not a model. The score rises with the player's deposits in the last 30 days, " +
 			"as deposits / (deposits + 2,000 €), using only data up to that day. Night and loss-chasing reasons are " +
 			"shown as context and do not change the score. It is a signal for human review, never a diagnosis.",
-		LabelDefinition: "No label exists yet. Chase sessions follow the data science team's proxy " +
-			"(2 hours or longer, 3 or more deposits, net loss). The session and chase definitions are provisional " +
-			"until the data science team freezes them.",
-		IntendedUse: "Running and demonstrating the app on real anonymised behaviour until ante-research publishes a model.",
-		DataProtection: "TSI-100-v1: 100 anonymised accounts with archive-local pseudonyms. Time is only relative to " +
+		LabelDefinition: "Self-exclusion is marked in the export, but this baseline is not evaluated against it. " +
+			"Chase sessions follow the data science team's proxy (2 hours or longer, 3 or more deposits, net loss) " +
+			"and are provisional until the team freezes them.",
+		IntendedUse: "Running and demonstrating the app on the team's current export until ante-research publishes a model.",
+		DataProtection: "Operator account and brand IDs are replaced by pseudonyms and brand codes. Time is only relative to " +
 			"each account's first event. No rows from the export are kept in the repository.",
 		EthicalRisks: "Deposits alone miss other signs of harm and can flag high-spending players who are not at risk. " +
 			"The score must not be read as a diagnosis.",
 		Limits: []string{
-			"Deposit times are technical, not confirmed behaviour time.",
-			"balance_after_eur is not a verified own-funds balance.",
-			"Night uses the recorded local hour; its timezone is not stated.",
-			"Session and chase definitions are provisional.",
-			"A session that runs past midnight is counted, deposits included, on the day it starts.",
-			"Net result covers completed ordinary rounds only; free-spin and bonus wins are not included.",
-			"No evaluation, because the export has no labels.",
+			"Amounts are converted to EUR at ECB monthly average rates.",
+			fmt.Sprintf("%d accounts in RUB, KZT or UAH skipped (no ECB rate).", skipped),
+			"Sessions are split after 60 minutes without events.",
+			"Night uses the UTC hour; the player's timezone is unknown.",
+			"balance_after mixes wallets and is not fully reconciled.",
+			"Days are 24-hour periods from the account's first event; a session that crosses into the next day is counted on the day it starts.",
+			"No evaluation yet.",
 		},
 		Metrics: []fakeartifacts.CardMetric{},
 	}

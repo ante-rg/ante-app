@@ -38,7 +38,7 @@ make load MODEL=<version> DATABASE_URL='postgres://postgres:<password>@localhost
 
 The password is in the server's `.env` and never goes into the repository.
 
-Known limit: two datasets that share player IDs (`dummy-v0` and the TSI-100 baseline both use `S001` to `S100`) overwrite each other's activity, sessions and rule flags, so the inactive model's scores no longer match. Replacing a dataset cleanly is tracked in #25.
+Known limit: two datasets that share player IDs overwrite each other's activity, sessions and rule flags, so the inactive model's scores no longer match. `dummy-v0` (`S001`…) and the v4 baseline (`A00001`…) do not share IDs. Replacing a dataset cleanly is tracked in #25.
 
 ## Server
 
